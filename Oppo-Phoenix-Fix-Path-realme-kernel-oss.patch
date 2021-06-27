@@ -1,0 +1,36 @@
+From 75ba56978e5c17fa07d8a46684b78bb456706ea4 Mon Sep 17 00:00:00 2001
+From: realme-kernel-opensource <realme-kernel-opensource@realme.com>
+Date: Mon, 7 Jun 2021 15:18:29 +0800
+Subject: [PATCH] oppo_phoenix: Fix Header Paths
+
+---
+ init/main.c    | 2 +-
+ kernel/panic.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/init/main.c b/init/main.c
+index 321cc2288..44b1e1c17 100755
+--- a/init/main.c
++++ b/init/main.c
+@@ -95,7 +95,7 @@
+ 
+ #ifdef VENDOR_EDIT
+ // Kun.Hu@TECH.BSP.Stability.PHOENIX_PROJECT 2019/06/11, Add for phoenix project
+-#include "../../vendor/oppo/oppo_phoenix/kernel/oppo_phoenix/oppo_phoenix.h"
++#include "../drivers/soc/oppo/oppo_phoenix/oppo_phoenix.h"
+ #endif  //VENDOR_EDIT
+ 
+ #ifdef VENDOR_EDIT
+diff --git a/kernel/panic.c b/kernel/panic.c
+index 393d5f6a3..c68af8653 100755
+--- a/kernel/panic.c
++++ b/kernel/panic.c
+@@ -30,7 +30,7 @@
+ 
+ #ifdef VENDOR_EDIT
+ // Kun.Hu@TECH.BSP.Stability.PHOENIX_PROJECT 2019/06/11, Add for phoenix project
+-#include "../../vendor/oppo/oppo_phoenix/kernel/oppo_phoenix/oppo_phoenix.h"
++#include "../drivers/soc/oppo/oppo_phoenix/oppo_phoenix.h"
+ int kernel_panic_happened = 0;
+ #endif
+ 
