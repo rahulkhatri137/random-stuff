@@ -1,7 +1,7 @@
 From 352904822beb1a03d9782bc99d5d44f22120c36b Mon Sep 17 00:00:00 2001
 From: Ash Blake <ash.blake@tutanota.com>
 Date: Mon, 19 Apr 2021 01:40:45 +0200
-Subject: [PATCH] [HACK] RMX2020: usb: fix usb preferences by spoofing roles
+Subject: [PATCH] [HACK] RMX2020: usb- fix usb preferences by spoofing roles
 
 Our device has broken roles: they appear to be permanently set to
 NONE and don't respond to configfs writes. This causes Android to
