@@ -1,0 +1,13 @@
+diff --git a/gui/theme/portrait_hdpi/ui.xml b/gui/theme/portrait_hdpi/ui.xml
+index 95c227a..43523a5 100755
+--- a/gui/theme/portrait_hdpi/ui.xml
++++ b/gui/theme/portrait_hdpi/ui.xml
+@@ -278,7 +278,7 @@
+ 
+ 			<text color="%text_color%">
+ 				<font resource="font_m"/>
+-				<placement x="%center_x%" y="%row1_header_y%" placement="5"/>
++				<placement x="370" y="%row1_header_y%" placement="5"/>
+ 				<text>%tw_time%</text>
+ 			</text>
+ 
