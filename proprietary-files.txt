@@ -258,6 +258,18 @@ vendor/lib64/libarcsoft_smart_denoise.so
 # Camera-bin
 vendor/bin/hw/camerahalserver
 
+# Kernel-Modules
+vendor/lib/modules/bt_drv.ko
+vendor/lib/modules/fmradio_drv.ko
+vendor/lib/modules/fpsgo.ko
+vendor/lib/modules/gps_drv.ko
+vendor/lib/modules/kheaders.ko
+vendor/lib/modules/met.ko
+vendor/lib/modules/udc_lib.ko
+vendor/lib/modules/wlan_drv_gen4m.ko
+vendor/lib/modules/wmt_chrdev_wifi.ko
+vendor/lib/modules/wmt_drv.ko
+
 # Camera-configs
 vendor/etc/camera/Arc_wdc_calib.bin
 vendor/etc/camera/engineer_camera_config
