@@ -1,0 +1,1957 @@
+From 12a0c71db5c61fc26b2d3102c628edbf0636069f Mon Sep 17 00:00:00 2001
+From: TheMalachite <eliasgheeraert@gmail.com>
+Date: Mon, 30 Aug 2021 10:36:02 +0200
+Subject: [PATCH] treewide: Drop Oplus security changes
+
+- Oplus security changes completely nuke support SELinux permissive, block system mounting and spam logs for nothing
+
+Change-Id: I73263b05cf2102aeef753a00f576e607972c5bf1
+---
+ Android.mk                                    |   5 -
+ OplusKernelEnvConfig.mk                       |  40 ---
+ arch/arm64/configs/oplus6893_defconfig        |   1 -
+ arch/arm64/kernel/Makefile                    |   5 -
+ arch/arm64/kernel/asm-offsets.c               |  15 -
+ arch/arm64/kernel/entry.S                     |   8 -
+ arch/arm64/kernel/oplus_root.S                | 139 --------
+ arch/arm64/kernel/rootguard/Makefile          |   7 -
+ .../arm64/kernel/rootguard/oplus_exec_block.c | 142 ---------
+ .../kernel/rootguard/oplus_guard_general.c    |  93 ------
+ .../kernel/rootguard/oplus_guard_general.h    |  18 --
+ .../kernel/rootguard/oplus_hook_syscall.c     | 100 ------
+ .../kernel/rootguard/oplus_mount_block.c      |  83 -----
+ arch/arm64/kernel/rootguard/oplus_root.h      |  31 --
+ .../arm64/kernel/rootguard/oplus_root_check.c |  86 -----
+ drivers/soc/oplus/system/Kconfig              |   3 -
+ drivers/soc/oplus/system/Makefile             |   3 -
+ drivers/soc/oplus/system/feedback/kernel_fb.c |   6 -
+ drivers/soc/oplus/system/selinux/Kconfig      |   8 -
+ drivers/soc/oplus/system/selinux/Makefile     |   4 -
+ drivers/soc/oplus/system/selinux/proc.c       |  86 -----
+ fs/exec.c                                     |  14 -
+ fs/namespace.c                                |  20 --
+ include/linux/oplus_kevent.h                  |  47 ---
+ include/linux/security.h                      |  11 -
+ kernel/Makefile                               |   4 -
+ kernel/keventupload/Makefile                  |   4 -
+ kernel/keventupload/oplus_kevent_test.c       | 300 ------------------
+ kernel/keventupload/oplus_kevent_upload.c     | 146 ---------
+ net/socket.c                                  |   5 -
+ oplus_native_features.sh                      |  10 +-
+ security/selinux/Kconfig                      |   6 +-
+ security/selinux/avc.c                        |   8 -
+ security/selinux/hooks.c                      |   8 -
+ security/selinux/selinuxfs.c                  |   8 -
+ tools/changeConfig.sh                         |  39 ---
+ 36 files changed, 3 insertions(+), 1510 deletions(-)
+ delete mode 100755 arch/arm64/kernel/oplus_root.S
+ delete mode 100755 arch/arm64/kernel/rootguard/Makefile
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_exec_block.c
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_guard_general.c
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_guard_general.h
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_hook_syscall.c
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_mount_block.c
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_root.h
+ delete mode 100755 arch/arm64/kernel/rootguard/oplus_root_check.c
+ delete mode 100755 drivers/soc/oplus/system/selinux/Kconfig
+ delete mode 100755 drivers/soc/oplus/system/selinux/Makefile
+ delete mode 100755 drivers/soc/oplus/system/selinux/proc.c
+ delete mode 100755 include/linux/oplus_kevent.h
+ delete mode 100755 kernel/keventupload/Makefile
+ delete mode 100755 kernel/keventupload/oplus_kevent_test.c
+ delete mode 100755 kernel/keventupload/oplus_kevent_upload.c
+ delete mode 100755 tools/changeConfig.sh
+
+diff --git a/Android.mk b/Android.mk
+index 8609f250c5d0..b4a114d198f6 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -31,11 +31,6 @@ KERNEL_MAKE_DEPENDENCIES := $(filter-out %/.git %/.gitignore %/.gitattributes,$(
+ $(TARGET_KERNEL_CONFIG): PRIVATE_DIR := $(KERNEL_DIR)
+ $(TARGET_KERNEL_CONFIG): $(KERNEL_CONFIG_FILE) $(LOCAL_PATH)/Android.mk
+ $(TARGET_KERNEL_CONFIG): $(KERNEL_MAKE_DEPENDENCIES)
+-	#ifdef OPLUS_FEATURE_FORCE_SELINUX
+-	OBSOLETE_KEEP_ADB_SECURE=$(OBSOLETE_KEEP_ADB_SECURE) \
+-	TARGET_MEMLEAK_DETECT_TEST=$(TARGET_MEMLEAK_DETECT_TEST) \
+-	$(KERNEL_DIR)/tools/changeConfig.sh $(KERNEL_CONFIG_FILE)
+-	#endif OPLUS_FEATURE_FORCE_SELINUX
+ 	$(hide) mkdir -p $(dir $@)
+ #ifdef OPLUS_ARCH_INJECT
+ 	source kernel-4.14/oplus_native_features.sh ; \
+diff --git a/OplusKernelEnvConfig.mk b/OplusKernelEnvConfig.mk
+index 5bd568d05c31..d7855006f4b7 100755
+--- a/OplusKernelEnvConfig.mk
++++ b/OplusKernelEnvConfig.mk
+@@ -66,7 +66,6 @@ OPLUS_FEATURE_PHOENIX \
+ OPLUS_FEATURE_AGINGTEST \
+ OPLUS_FEATURE_PROCESS_RECLAIM \
+ OPLUS_FEATURE_RESET_ROLLBACK_INDEX \
+-OPLUS_FEATURE_SELINUX_CONTROL_LOG \
+ OPLUS_FEATURE_SENSOR \
+ OPLUS_FEATURE_SENSOR_ALGORITHM \
+ OPLUS_FEATURE_SENSOR_SMEM \
+@@ -120,45 +119,6 @@ $(foreach myfeature,$(ALLOWED_MCROS),\
+ 
+ 
+ # BSP team can do customzation by referring the feature variables
+-ifeq ($(OPLUS_FEATURE_SECURE_GUARD),yes)
+-export CONFIG_OPLUS_SECURE_GUARD=y
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_SECURE_GUARD
+-KBUILD_CPPFLAGS += -DCONFIG_OPLUS_SECURE_GUARD
+-CFLAGS_KERNEL += -DCONFIG_OPLUS_SECURE_GUARD
+-CFLAGS_MODULE += -DCONFIG_OPLUS_SECURE_GUARD
+-endif
+-
+-ifeq ($(OPLUS_FEATURE_SECURE_ROOTGUARD),yes)
+-export CONFIG_OPLUS_ROOT_CHECK=y
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_ROOT_CHECK
+-KBUILD_CPPFLAGS += -DCONFIG_OPLUS_ROOT_CHECK
+-CFLAGS_KERNEL += -DCONFIG_OPLUS_ROOT_CHECK
+-CFLAGS_MODULE += -DCONFIG_OPLUS_ROOT_CHECK
+-endif
+-
+-ifeq ($(OPLUS_FEATURE_SECURE_MOUNTGUARD),yes)
+-export CONFIG_OPLUS_MOUNT_BLOCK=y
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_MOUNT_BLOCK
+-endif
+-
+-ifeq ($(OPLUS_FEATURE_SECURE_EXECGUARD),yes)
+-export CONFIG_OPLUS_EXECVE_BLOCK=y
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_EXECVE_BLOCK
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_EXECVE_REPORT
+-endif
+-
+-ifeq ($(OPLUS_FEATURE_SECURE_KEVENTUPLOAD),yes)
+-export CONFIG_OPLUS_KEVENT_UPLOAD=y
+-KBUILD_CFLAGS += -DCONFIG_OPLUS_KEVENT_UPLOAD
+-KBUILD_CPPFLAGS += -DCONFIG_OPLUS_KEVENT_UPLOAD
+-CFLAGS_KERNEL += -DCONFIG_OPLUS_KEVENT_UPLOAD
+-CFLAGS_MODULE += -DCONFIG_OPLUS_KEVENT_UPLOAD
+-endif
+-
+-ifeq ($(OPLUS_FEATURE_SECURE_KEYINTERFACESGUARD),yes)
+-KBUILD_CFLAGS += -DOPLUS_DISALLOW_KEY_INTERFACES
+-endif
+-
+ ifeq ($(OPLUS_FEATURE_MULTIBITS_BL),yes)
+ KBUILD_CFLAGS += -DOPLUS_FEATURE_MULTIBITS_BL
+ KBUILD_CPPFLAGS += -DOPLUS_FEATURE_MULTIBITS_BL
+diff --git a/arch/arm64/configs/oplus6893_defconfig b/arch/arm64/configs/oplus6893_defconfig
+index e11373d4c351..98f50ee83342 100755
+--- a/arch/arm64/configs/oplus6893_defconfig
++++ b/arch/arm64/configs/oplus6893_defconfig
+@@ -573,7 +573,6 @@ CONFIG_FAULT_INJECTION=y
+ CONFIG_ENABLE_DEFAULT_TRACERS=y
+ CONFIG_MTK_SCHED_TRACERS=y
+ CONFIG_STATIC_USERMODEHELPER_PATH="/system_ext/bin/aee_core_forwarder"
+-# CONFIG_SECURITY_SELINUX_DEVELOP is not set
+ CONFIG_CRYPTO_TWOFISH=y
+ 
+ #ifdef OPLUS_FEATURE_HANS_FREEZE
+diff --git a/arch/arm64/kernel/Makefile b/arch/arm64/kernel/Makefile
+index 8f9f08972b94..e32e134b3346 100644
+--- a/arch/arm64/kernel/Makefile
++++ b/arch/arm64/kernel/Makefile
+@@ -71,8 +71,3 @@ extra-y					+= $(head-y) vmlinux.lds
+ ifeq ($(CONFIG_DEBUG_EFI),y)
+ AFLAGS_head.o += -DVMLINUX_PATH="\"$(realpath $(objtree)/vmlinux)\""
+ endif
+-
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-obj-$(CONFIG_OPLUS_SECURE_GUARD)		+=  rootguard/
+-obj-$(CONFIG_OPLUS_SECURE_GUARD)        +=  oplus_root.o
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+\ No newline at end of file
+diff --git a/arch/arm64/kernel/asm-offsets.c b/arch/arm64/kernel/asm-offsets.c
+index d926e735186c..631b07ee0355 100644
+--- a/arch/arm64/kernel/asm-offsets.c
++++ b/arch/arm64/kernel/asm-offsets.c
+@@ -165,21 +165,6 @@ int main(void)
+ #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+   DEFINE(TRAMP_VALIAS,		TRAMP_VALIAS);
+ #endif
+-
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-  DEFINE(PROOT_TSK_CRED,	offsetof(struct task_struct, cred));
+-  DEFINE(PROOT_CRED_UID,	offsetof(struct cred, uid));
+-  DEFINE(PROOT_CRED_EUID,	offsetof(struct cred, euid));
+-  DEFINE(PROOT_CRED_FSUID,	offsetof(struct cred, fsuid));
+-#ifdef CONFIG_THREAD_INFO_IN_TASK
+-  DEFINE(PROOT_THREAD_ADDR_LIMIT,	offsetof(struct task_struct, thread_info.addr_limit));
+-#else
+-  DEFINE(PROOT_THREAD_TSK,	offsetof(struct thread_info,task));
+-  DEFINE(PROOT_THREAD_ADDR_LIMIT,	offsetof(struct thread_info, addr_limit));
+-#endif
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ #ifdef CONFIG_ARM_SDE_INTERFACE
+   DEFINE(SDEI_EVENT_INTREGS,	offsetof(struct sdei_registered_event, interrupted_regs));
+   DEFINE(SDEI_EVENT_PRIORITY,	offsetof(struct sdei_registered_event, priority));
+diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
+index 5b1eeef41bad..be668e8b80b6 100644
+--- a/arch/arm64/kernel/entry.S
++++ b/arch/arm64/kernel/entry.S
+@@ -986,11 +986,7 @@ el0_svc_naked:					// compat entry point
+ 	cmp     wscno, wsc_nr			// check upper syscall limit
+ 	b.hs	ni_sys
+ 	mask_nospec64 xscno, xsc_nr, x19	// enforce bounds for syscall number
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-	adr x16, oplus_root_check
+-#else
+ 	ldr	x16, [stbl, xscno, lsl #3]	// address in the syscall table
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+ 	blr	x16				// call sys_* routine
+ 	b	ret_fast_syscall
+ ni_sys:
+@@ -1020,11 +1016,7 @@ __sys_trace:
+ 	ldp	x2, x3, [sp, #S_X2]
+ 	ldp	x4, x5, [sp, #S_X4]
+ 	ldp	x6, x7, [sp, #S_X6]
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-	adr x16, oplus_root_check
+-#else
+ 	ldr	x16, [stbl, xscno, lsl #3]	// address in the syscall table
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+ 	blr	x16				// call sys_* routine
+ 
+ __sys_trace_return:
+diff --git a/arch/arm64/kernel/oplus_root.S b/arch/arm64/kernel/oplus_root.S
+deleted file mode 100755
+index 0a3cb2abde9d..000000000000
+--- a/arch/arm64/kernel/oplus_root.S
++++ /dev/null
+@@ -1,139 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_root.S
+-* Description: Block root code,block root action and record. This program is
+-* distributed in the hope that it will block process to elevate privilege of root.
+-*
+-* Version    : 1.0
+-* Date       :
+-* Author     :
+-* TAG        :
+-****************************************************************/
+-
+-
+-#include <linux/init.h>
+-#include <linux/linkage.h>
+-#include <generated/asm-offsets.h>
+-
+-
+-#include <asm/assembler.h>
+-#include <asm/errno.h>
+-#include <asm/esr.h>
+-#include <asm/thread_info.h>
+-#include <asm/unistd.h>
+-#include "rootguard/oplus_root.h"
+-/*
+- X26 : syscall number
+- x27 : syscall table pointer
+- x28 : current thread_info
+- X25 : number of system calls
+- X19,X20,X29: store uid\gid\euid\egid\fsuid\fsgid
+- */
+-
+-.extern oplus_root_reboot
+-
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-.extern oplus_root_check_succ
+-.extern is_unlocked
+-#endif
+-
+-ENTRY(oplus_root_check)
+-	mov	x21, x30
+-#ifdef CONFIG_THREAD_INFO_IN_TASK
+-	mrs	x16, sp_el0
+-#else
+-	ldr	x16, [x28, #PROOT_THREAD_TSK]
+-#endif
+-	ldr	x15, [x16, #PROOT_TSK_CRED]
+-	ldr	x19, [x15, #PROOT_CRED_UID]
+-	ldr	x20, [x15, #PROOT_CRED_EUID]
+-	ldr	x29, [x15, #PROOT_CRED_FSUID]
+-
+-	ldr	x16, [x27, x26, lsl #3]				// address in the syscall table
+-	blr	x16
+-
+-	mov x22, x0
+-
+-	cmp	x19, #0						//if phone adb have root permission,we donnot check
+-	beq	2f
+-
+-	bl	is_unlocked
+-	cmp	x0, #0
+-	bne	2f
+-
+-#ifdef CONFIG_THREAD_INFO_IN_TASK
+-	mrs	x16, sp_el0
+-	ldr	x15, [x16, #PROOT_THREAD_ADDR_LIMIT]
+-#else
+-	ldr	x15, [x28, #PROOT_THREAD_ADDR_LIMIT]
+-#endif
+-	mov	x17, #0x0000008000000000
+-	cmp	x15, x17
+-	b.hi	5f
+-
+-#ifdef CONFIG_THREAD_INFO_IN_TASK
+-	mrs	x15, sp_el0					//if uid not change,we return
+-#else
+-	ldr	x15, [x28, #PROOT_THREAD_TSK]			//if uid not change,we return
+-#endif
+-	ldr	x17, [x15, #PROOT_TSK_CRED]
+-	ldr	x16, [x17, #PROOT_CRED_UID]
+-	cmp	x16, x19
+-	bne	3f
+-	ldr	x16, [x17, #PROOT_CRED_EUID]			//if euid not change,we return
+-	cmp	x16, x20
+-	bne	3f
+-	ldr	x16, [x17, #PROOT_CRED_FSUID]			//if fsuid not change,we return
+-	cmp	x16, x29
+-	bne	3f
+-
+-2:
+-	mov	x30, x21
+-	mov x0, x22
+-	ret
+-
+-3:
+-/*
+-//In Android R K 4.14, there both have 32 and 64 bit syscalls
+-#ifdef CONFIG_COMPAT
+-	cmp	X25, #__NR_compat_syscalls
+-	beq	4f
+-#endif
+-*/
+-	cmp	x26, #__NR_setresgid
+-	beq	2b
+-	sub	x15, x26, #__NR_setregid
+-	cmp	x15, #0x4
+-	b.ls	2b
+-//	b	5f
+-
+-#ifdef CONFIG_COMPAT
+-4:
+-	cmp	x26, #__NR_setreuid32
+-	beq	2b
+-	cmp	x26, #__NR_setregid32
+-	beq	2b
+-	cmp	x26, #__NR_setresuid32
+-	beq	2b
+-	cmp	x26, #__NR_setresgid32
+-	beq	2b
+-	cmp	x26, #__NR_setuid32
+-	beq	2b
+-	cmp	x26, #__NR_setgid32
+-	beq	2b
+-#endif
+-
+-5:
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-	mov	x0, x19
+-	mov	x1, x20
+-	mov	x2, x29
+-	mov	x3, x26
+-	bl	oplus_root_check_succ
+-#endif
+-
+-	mov	x0, #0
+-	bl	oplus_root_reboot
+-
+-END(oplus_root_check)
+\ No newline at end of file
+diff --git a/arch/arm64/kernel/rootguard/Makefile b/arch/arm64/kernel/rootguard/Makefile
+deleted file mode 100755
+index 631d4fad5dda..000000000000
+--- a/arch/arm64/kernel/rootguard/Makefile
++++ /dev/null
+@@ -1,7 +0,0 @@
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-obj-$(CONFIG_OPLUS_ROOT_CHECK)	 +=  oplus_root_check.o
+-obj-$(CONFIG_OPLUS_EXECVE_BLOCK)	 +=  oplus_exec_block.o
+-obj-$(CONFIG_OPLUS_MOUNT_BLOCK)	 +=  oplus_mount_block.o
+-obj-$(CONFIG_OPLUS_SECURE_GUARD)	 +=  oplus_guard_general.o
+-obj-$(CONFIG_OPLUS_SECURE_GUARD)	 +=  oplus_hook_syscall.o
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+diff --git a/arch/arm64/kernel/rootguard/oplus_exec_block.c b/arch/arm64/kernel/rootguard/oplus_exec_block.c
+deleted file mode 100755
+index 643cd72c3b8b..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_exec_block.c
++++ /dev/null
+@@ -1,142 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved.
+-* File       : oplus_exec_block.c
+-* Description: For exec block
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#include <linux/slab.h>
+-#include <linux/file.h>
+-#include <linux/fdtable.h>
+-#include <linux/mm.h>
+-#include <linux/vmacache.h>
+-#include <linux/stat.h>
+-#include <linux/fcntl.h>
+-#include <linux/swap.h>
+-#include <linux/string.h>
+-#include <linux/init.h>
+-
+-#if defined(CONFIG_OPLUS_EXECVE_BLOCK) || defined(CONFIG_OPLUS_EXECVE_REPORT)
+-
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-#include <linux/oplus_kevent.h>
+-#include <linux/cred.h>
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-
+-#ifdef OPLUS_DISALLOW_KEY_INTERFACES
+-#include "oplus_guard_general.h"
+-
+-static void oplus_report_execveat(const char *path, const char* dcs_event_id)
+-{
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-	struct kernel_packet_info* dcs_event;
+-	char dcs_stack[sizeof(struct kernel_packet_info) + 256];
+-	const char* dcs_event_tag = "kernel_event";
+-	// const char* dcs_event_id = "execve_report";
+-	char* dcs_event_payload = NULL;
+-	int uid = current_uid().val;
+-	//const struct cred *cred = current_cred();
+-
+-	dcs_event = (struct kernel_packet_info*)dcs_stack;
+-	dcs_event_payload = dcs_stack +
+-		sizeof(struct kernel_packet_info);
+-
+-	dcs_event->type = 3;
+-
+-	strncpy(dcs_event->log_tag, dcs_event_tag,
+-		sizeof(dcs_event->log_tag));
+-	strncpy(dcs_event->event_id, dcs_event_id,
+-		sizeof(dcs_event->event_id));
+-
+-	dcs_event->payload_length = snprintf(dcs_event_payload, 256,
+-		"%d,path@@%s", uid, path);
+-	if (dcs_event->payload_length < 256) {
+-		dcs_event->payload_length += 1;
+-	}
+-	kevent_send_to_user(dcs_event);
+-
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-	printk(KERN_ERR "=======>[kevent_send_to_user:execve]:common %s result %s\n", path, dcs_event_id);
+-}
+-
+-static int oplus_check_execveat_perm(struct file* filp)
+-{
+-	char *absolute_path_buf = NULL;
+-	char *absolute_path = NULL;
+-	char *context = NULL;
+-	u32 context_len = 0;
+-	int rc = 0;
+-	int retval = 0;
+-
+-	/*if (!uid_eq(current_uid(), GLOBAL_ROOT_UID))
+-		goto out_ret;*/
+-
+-	absolute_path_buf = (char *)__get_free_page(GFP_KERNEL);
+-	retval = -ENOMEM;
+-	if (absolute_path_buf == NULL)
+-		goto out_ret;
+-
+-	absolute_path = d_path(&filp->f_path, absolute_path_buf, PAGE_SIZE);
+-	retval = PTR_ERR(absolute_path);
+-	if (IS_ERR(absolute_path))
+-                goto out_free;
+-
+-	retval = 0;
+-	if (strncmp(absolute_path, "/data", 5))
+-		goto out_free;
+-	if (!strncmp(absolute_path, "/data/local/tmp", 15)) {
+-		goto out_free;
+-	}
+-	//add end
+-	if (!uid_eq(current_uid(), GLOBAL_ROOT_UID)) {
+-#ifdef CONFIG_OPLUS_EXECVE_REPORT
+-		oplus_report_execveat(absolute_path, "execve_report");
+-#endif /* CONFIG_OPLUS_EXECVE_REPORT */
+-	} else {
+-#ifdef CONFIG_OPLUS_EXECVE_BLOCK
+-		rc = get_current_security_context(&context, &context_len);
+-		retval = -EPERM;
+-		if (rc) {
+-			oplus_report_execveat(absolute_path, "execve_block");
+-			goto out_free;
+-		}
+-
+-		retval = -EPERM;
+-#endif /* CONFIG_OPLUS_EXECVE_BLOCK */
+-	}
+-
+-	retval = 0;
+-
+-out_free:
+-	kfree(context);
+-	free_page((unsigned long)absolute_path_buf);
+-
+-out_ret:
+-	return retval;
+-}
+-
+-int oplus_exec_block(struct file *file)
+-{
+-	int  retval = 0;
+-
+-	if (!is_unlocked()) {
+-		retval = oplus_check_execveat_perm(file);
+-		if (retval < 0) {
+-			return retval;
+-		}
+-	}
+-	return retval;
+-}
+-#else
+-int oplus_exec_block(struct file *file)
+-{
+-	int  retval = 0;
+-	return retval;
+-}
+-#endif /* OPLUS_DISALLOW_KEY_INTERFACES */
+-#endif /* CONFIG_OPLUS_EXECVE_BLOCK or CONFIG_OPLUS_EXECVE_REPORT */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+diff --git a/arch/arm64/kernel/rootguard/oplus_guard_general.c b/arch/arm64/kernel/rootguard/oplus_guard_general.c
+deleted file mode 100755
+index 5be4d436acfb..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_guard_general.c
++++ /dev/null
+@@ -1,93 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_guard_general.c
+-* Description: some common function for root guard
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#include <linux/init.h>
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <linux/types.h>
+-
+-
+-#ifdef CONFIG_OPLUS_SYSTEM_KERNEL_QCOM
+-enum{
+-        MSM_BOOT_MODE__NORMAL,
+-        MSM_BOOT_MODE__FASTBOOT,
+-        MSM_BOOT_MODE__RECOVERY,
+-        MSM_BOOT_MODE__FACTORY,
+-        MSM_BOOT_MODE__RF,
+-        MSM_BOOT_MODE__WLAN,
+-        MSM_BOOT_MODE__MOS,
+-        MSM_BOOT_MODE__CHARGE,
+-        MSM_BOOT_MODE__SILENCE,
+-        MSM_BOOT_MODE__SAU,
+-
+-        MSM_BOOT_MODE__AGING = 998,
+-        MSM_BOOT_MODE__SAFE = 999,
+-};
+-
+-extern int get_boot_mode(void);
+-bool is_normal_boot_mode(void)
+-{
+-	return MSM_BOOT_MODE__NORMAL == get_boot_mode();
+-}
+-#else
+-#define MTK_NORMAL_BOOT	0
+-extern unsigned int get_boot_mode(void);
+-bool is_normal_boot_mode(void)
+-{
+-	return MTK_NORMAL_BOOT == get_boot_mode();
+-}
+-#endif
+-
+-
+-enum{
+-        BOOT_STATE__GREEN,
+-        BOOT_STATE__ORANGE,
+-        BOOT_STATE__YELLOW,
+-        BOOT_STATE__RED,
+-};
+-
+-
+-static int __ro_after_init g_boot_state  = BOOT_STATE__GREEN;
+-
+-
+-bool is_unlocked(void)
+-{
+-	return  BOOT_STATE__ORANGE== g_boot_state;
+-}
+-
+-static int __init boot_state_init(void)
+-{
+-	char * substr = strstr(boot_command_line, "androidboot.verifiedbootstate=");
+-	if (substr) {
+-   		substr += strlen("androidboot.verifiedbootstate=");
+-        if (strncmp(substr, "green", 5) == 0) {
+-        	g_boot_state = BOOT_STATE__GREEN;
+-        } else if (strncmp(substr, "orange", 6) == 0) {
+-       		g_boot_state = BOOT_STATE__ORANGE;
+-        } else if (strncmp(substr, "yellow", 6) == 0) {
+-        	g_boot_state = BOOT_STATE__YELLOW;
+-        } else if (strncmp(substr, "red", 3) == 0) {
+-        	g_boot_state = BOOT_STATE__RED;
+-       	}
+-	}
+-
+-	return 0;
+-}
+-
+-static void __exit boot_state_exit()
+-{
+-	return ;
+-}
+-
+-module_init(boot_state_init);
+-module_exit(boot_state_exit);
+-MODULE_LICENSE("GPL");
+-#endif/*OPLUS_GUARD_GENERAL_H_*/
+diff --git a/arch/arm64/kernel/rootguard/oplus_guard_general.h b/arch/arm64/kernel/rootguard/oplus_guard_general.h
+deleted file mode 100755
+index 704128a9003f..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_guard_general.h
++++ /dev/null
+@@ -1,18 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_guard_general.h
+-* Description: For rootguard general function
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#ifndef OPLUS_GUARD_GENERAL_H_
+-#define OPLUS_GUARD_GENERAL_H_
+-
+-bool is_unlocked(void);
+-
+-bool is_normal_boot_mode(void);
+-
+-#endif /*OPLUS_GUARD_GENERAL_H_*/
+diff --git a/arch/arm64/kernel/rootguard/oplus_hook_syscall.c b/arch/arm64/kernel/rootguard/oplus_hook_syscall.c
+deleted file mode 100755
+index 1456f89e1724..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_hook_syscall.c
++++ /dev/null
+@@ -1,100 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_hook_syscall.c
+-* Description: replace the syscall.c
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#include <linux/version.h>
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+-#include <linux/compiler.h>
+-#include <linux/context_tracking.h>
+-#include <linux/errno.h>
+-#include <linux/nospec.h>
+-#include <linux/ptrace.h>
+-#include <linux/syscalls.h>
+-
+-#include <asm/daifflags.h>
+-#include <asm/debug-monitors.h>
+-#include <asm/fpsimd.h>
+-#include <asm/syscall.h>
+-#include <asm/thread_info.h>
+-#include <asm/unistd.h>
+-
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#define KERNEL_ADDR_LIMIT 0x0000008000000000
+-#include <asm/uaccess.h>
+-#include <linux/cred.h>
+-#include <linux/selinux.h>
+-#include "oplus_root.h"
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+-
+-long compat_arm_syscall(struct pt_regs *regs, int scno);
+-long sys_ni_syscall(void);
+-
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-extern void oplus_root_check_succ(uid_t uid, uid_t euid, uid_t fsuid, uid_t callnum);
+-extern bool is_unlocked(void);
+-extern void oplus_root_reboot(void);
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-
+-static long oplus_do_ni_syscall(struct pt_regs *regs, int scno)
+-{
+-#ifdef CONFIG_COMPAT
+-	long ret;
+-	if (is_compat_task()) {
+-		ret = compat_arm_syscall(regs, scno);
+-		if (ret != -ENOSYS)
+-			return ret;
+-	}
+-#endif
+-
+-	return sys_ni_syscall();
+-}
+-
+-static long __oplus_invoke_syscall(struct pt_regs *regs, syscall_fn_t syscall_fn)
+-{
+-	return syscall_fn(regs);
+-}
+-
+-void oplus_invoke_syscall(struct pt_regs *regs, unsigned int scno,
+-			   unsigned int sc_nr,
+-			   const syscall_fn_t syscall_table[])
+-{
+-	long ret;
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-
+-	unsigned int IntUid_1st = current_uid().val;
+-	unsigned int IntEuid_1st = current_euid().val;
+-	unsigned int IntFsuid_1st = current_fsuid().val;
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-	if (scno < sc_nr) {
+-		syscall_fn_t syscall_fn;
+-		syscall_fn = syscall_table[array_index_nospec(scno, sc_nr)];
+-		ret = __oplus_invoke_syscall(regs, syscall_fn);
+-	} else {
+-		ret = oplus_do_ni_syscall(regs, scno);
+-	}
+-
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-
+-	if ((IntUid_1st != 0) && (is_unlocked() == 0) ){
+-		if((scno != __NR_setreuid32) && (scno != __NR_setregid32) && (scno != __NR_setresuid32) && (scno != __NR_setresgid32) && (scno != __NR_setuid32) && (scno != __NR_setgid32)
+-		&& (scno != __NR_setreuid) && (scno != __NR_setregid) && (scno != __NR_setresuid) && (scno != __NR_setresgid) && (scno != __NR_setuid) && (scno != __NR_setgid)
+-		){
+-		//make sure the addr_limit in kernel space
+-		//KERNEL_DS:        0x7f ffff ffff
+-		//KERNEL_ADDR_LIMIT:0x80 0000 0000
+-			if (((current_uid().val != IntUid_1st) || (current_euid().val != IntEuid_1st) || (current_fsuid().val != IntFsuid_1st)) || (get_fs() > KERNEL_ADDR_LIMIT)){
+-				oplus_root_check_succ(IntUid_1st, IntEuid_1st, IntFsuid_1st, scno);
+-				oplus_root_reboot();
+-			}
+-		}
+-	}
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-	regs->regs[0] = ret;
+-}
+-#endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0) */
+diff --git a/arch/arm64/kernel/rootguard/oplus_mount_block.c b/arch/arm64/kernel/rootguard/oplus_mount_block.c
+deleted file mode 100755
+index c75ab7ac7d06..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_mount_block.c
++++ /dev/null
+@@ -1,83 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020   Oplus. All rights reserved.
+-* File       : oplus_mount_block.c
+-* Description: remount block.
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#include <linux/syscalls.h>
+-#include <linux/export.h>
+-#include <linux/capability.h>
+-#include <linux/mnt_namespace.h>
+-#include <linux/user_namespace.h>
+-#include <linux/uaccess.h>
+-#include <linux/file.h>
+-#include <linux/proc_ns.h>
+-#include <linux/magic.h>
+-#include <linux/bootmem.h>
+-#include <linux/task_work.h>
+-#include <linux/sched/task.h>
+-
+-#ifdef CONFIG_OPLUS_MOUNT_BLOCK
+-#include "oplus_guard_general.h"
+-
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-#include <linux/oplus_kevent.h>
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-
+-#ifdef OPLUS_DISALLOW_KEY_INTERFACES
+-int oplus_mount_block(const char __user *dir_name, unsigned long flags)
+-{
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-	struct kernel_packet_info* dcs_event;
+-	char dcs_stack[sizeof(struct kernel_packet_info) + 256];
+-	const char* dcs_event_tag = "kernel_event";
+-	const char* dcs_event_id = "mount_report";
+-	char* dcs_event_payload = NULL;
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-
+-
+- 	char dname[16] = {0};
+-	if (dir_name != NULL && copy_from_user(dname,dir_name,8) == 0){
+-		if ((!strncmp(dname, "/system", 8) || !strncmp(dname, "/vendor", 8))&& !(flags & MS_RDONLY)
+-			&& (is_normal_boot_mode())) {
+-			printk(KERN_ERR "[OPLUS]System partition is not permitted to be mounted as readwrite\n");
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-		printk(KERN_ERR "do_mount:kevent_send_to_user\n");
+-
+-		dcs_event = (struct kernel_packet_info*)dcs_stack;
+-		dcs_event_payload = dcs_stack +
+-		sizeof(struct kernel_packet_info);
+-
+-		dcs_event->type = 2;
+-
+-		strncpy(dcs_event->log_tag, dcs_event_tag,
+-			sizeof(dcs_event->log_tag));
+-		strncpy(dcs_event->event_id, dcs_event_id,
+-			sizeof(dcs_event->event_id));
+-
+-		dcs_event->payload_length = snprintf(dcs_event_payload, 256, "partition@@system");
+-		if (dcs_event->payload_length < 256) {
+-			dcs_event->payload_length += 1;
+-		}
+-
+-		kevent_send_to_user(dcs_event);
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-			return -EPERM;
+-		}
+-	}
+-
+-	return 0;
+-}
+-#else
+-int oplus_mount_block(const char __user *dir_name, unsigned long flags)
+-{
+-	return 0;
+-}
+-#endif /* OPLUS_DISALLOW_KEY_INTERFACES */
+-#endif /* CONFIG_OPLUS_MOUNT_BLOCK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+\ No newline at end of file
+diff --git a/arch/arm64/kernel/rootguard/oplus_root.h b/arch/arm64/kernel/rootguard/oplus_root.h
+deleted file mode 100755
+index 77f7e861ecc9..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_root.h
++++ /dev/null
+@@ -1,31 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_root.h
+-* Description: For rootguard syscall num
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifndef __ARCH_ARM64_OPLUS_ROOT_H_
+-#define __ARCH_ARM64_OPLUS_ROOT_H_
+-
+-#define __NR_setreuid32    203
+-#define __NR_setregid32    204
+-#define __NR_setresuid32   208
+-#define __NR_setresgid32   210
+-#define __NR_setuid32      213
+-#define __NR_setgid32      214
+-
+-#define __NR_setregid      143
+-#define __NR_setgid        144
+-#define __NR_setreuid      145
+-#define __NR_setuid        146
+-#define __NR_setresuid     147
+-#define __NR_setresgid     149
+-
+-#endif
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+diff --git a/arch/arm64/kernel/rootguard/oplus_root_check.c b/arch/arm64/kernel/rootguard/oplus_root_check.c
+deleted file mode 100755
+index 9bfd14cd483f..000000000000
+--- a/arch/arm64/kernel/rootguard/oplus_root_check.c
++++ /dev/null
+@@ -1,86 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved.
+-* File       : oplus_root_check.c
+-* Description: root check and kill process.
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#include <linux/delay.h>
+-#include <linux/kernel.h>
+-#include <linux/reboot.h>
+-#include <linux/string.h>
+-#include <linux/types.h>
+-#include <linux/version.h>
+-#include <linux/vmalloc.h>
+-#include <linux/selinux.h>
+-
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0)
+-#include <linux/sched/task.h>
+-#endif/* LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0) */
+-#include <linux/oplus_kevent.h>
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-
+-void oplus_root_check_succ(uid_t uid, uid_t euid, uid_t fsuid, uid_t callnum)
+-{
+-	struct kernel_packet_info *dcs_event;
+-	char dcs_stack[sizeof(struct kernel_packet_info) + 256];
+-	const char* dcs_event_tag = "kernel_event";
+-	const char* dcs_event_id = "root_check";
+-	char* dcs_event_payload = NULL;
+-
+-	int ret = -1;
+-	char comm[TASK_COMM_LEN], nameofppid[TASK_COMM_LEN];//
+-	struct task_struct * parent_task = NULL;
+-	int ppid = -1;
+-
+-	memset(comm, 0, TASK_COMM_LEN);
+-	memset(nameofppid, 0, TASK_COMM_LEN);
+-
+-	ppid = task_ppid_nr(current);
+-	parent_task = rcu_dereference(current->real_parent);
+-	if (parent_task){
+-		get_task_comm(nameofppid, parent_task);
+-	}
+-
+-	dcs_event = (struct kernel_packet_info*)dcs_stack;
+-	dcs_event->type = 0;
+-	strncpy(dcs_event->log_tag, dcs_event_tag, sizeof(dcs_event->log_tag));
+-	strncpy(dcs_event->event_id, dcs_event_id, sizeof(dcs_event->event_id));
+-	dcs_event_payload = kmalloc(256, GFP_ATOMIC);
+-	if (NULL == dcs_event_payload){
+-		return;
+-	}
+-	memset(dcs_event_payload, 0, 256);
+-
+-
+-	dcs_event->payload_length = snprintf(dcs_event_payload,256,
+-	      "%u$$old_euid@@%u$$old_fsuid@@%u$$sys_call_number@@%u$$addr_limit@@%lx\
+-	$$curr_uid@@%u$$curr_euid@@%u$$curr_fsuid@@%u$$curr_name@@%s$$ppid@@%d$$ppidname@@%s$$enforce@@%d",
+-	    uid,euid,fsuid,callnum,
+-	    get_fs(),current_uid().val,current_euid().val,current_fsuid().val,get_task_comm(comm, current), ppid, nameofppid,selinux_is_enabled());
+-	printk(KERN_INFO "oplus_root_check_succ,payload:%s\n",dcs_event_payload);
+-	memcpy(dcs_event->payload, dcs_event_payload, strlen(dcs_event_payload));
+-
+-	ret = kevent_send_to_user(dcs_event);
+-	if (ret != 0 ){
+-		printk(KERN_INFO "Send to user failed\n");
+-	}
+-
+-	kfree(dcs_event_payload);
+-
+-	return;
+-}
+-
+-#endif
+-
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-void oplus_root_reboot(void)
+-{
+-	printk(KERN_INFO "[OPLUS_ROOT_CHECK]:Kill the process of escalation...");
+-	do_group_exit(SIGKILL);
+-}
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-
+diff --git a/drivers/soc/oplus/system/Kconfig b/drivers/soc/oplus/system/Kconfig
+index f71882e8a532..66a728c198fa 100755
+--- a/drivers/soc/oplus/system/Kconfig
++++ b/drivers/soc/oplus/system/Kconfig
+@@ -65,9 +65,6 @@ source "drivers/soc/oplus/system/acm/Kconfig"
+ #ifdef OPLUS_FEATURE_THEIA
+ source "drivers/soc/oplus/system/theia/Kconfig"
+ #endif /* OPLUS_FEATURE_THEIA */
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-source "drivers/soc/oplus/system/selinux/Kconfig"
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+ #ifdef OPLUS_FEATURE_MISC
+ source "drivers/soc/oplus/system/misc/Kconfig"
+ #endif /* OPLUS_FEATURE_MISC */
+diff --git a/drivers/soc/oplus/system/Makefile b/drivers/soc/oplus/system/Makefile
+index eb8815f130db..e7405582c90a 100755
+--- a/drivers/soc/oplus/system/Makefile
++++ b/drivers/soc/oplus/system/Makefile
+@@ -38,9 +38,6 @@ obj-$(CONFIG_OPLUS_FEATURE_ACM)     += acm/
+ #ifdef OPLUS_FEATURE_THEIA
+ obj-$(CONFIG_OPLUS_FEATURE_THEIA)     += theia/
+ #endif /* OPLUS_FEATURE_THEIA */
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-obj-$(CONFIG_SECURITY_SELINUX) += selinux/
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+ #ifdef OPLUS_FEATURE_MISC
+ obj-y += misc/
+ #endif /* OPLUS_FEATURE_MISC */
+diff --git a/drivers/soc/oplus/system/feedback/kernel_fb.c b/drivers/soc/oplus/system/feedback/kernel_fb.c
+index e97d7dea67ef..3fc339c3de2e 100755
+--- a/drivers/soc/oplus/system/feedback/kernel_fb.c
++++ b/drivers/soc/oplus/system/feedback/kernel_fb.c
+@@ -172,12 +172,6 @@ static const struct genl_ops oplus_fb_kevent_upload_ops[] = {
+ 	},
+ };
+ 
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)) && !IS_ENABLED(CONFIG_OPLUS_KERNEL_SECURE_GUARD)
+-int kevent_send_to_user(struct kernel_packet_info *userinfo) {return 0;}
+-#endif
+-#endif
+-
+ static struct genl_family oplus_fb_kevent_family __ro_after_init = {
+ 	.name		= OPLUS_FB_GUARD_PROTOCAL_NAME,
+ 	.version	= OPLUS_FB_GUARD_GENL_VERSION,
+diff --git a/drivers/soc/oplus/system/selinux/Kconfig b/drivers/soc/oplus/system/selinux/Kconfig
+deleted file mode 100755
+index f350cdea6434..000000000000
+--- a/drivers/soc/oplus/system/selinux/Kconfig
++++ /dev/null
+@@ -1,8 +0,0 @@
+-# SPDX-License-Identifier: GPL-2.0-only
+-# Copyright (C) 2018-2020 Oplus. All rights reserved.
+-
+-config OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-  bool "config control selinux log"
+-  default y
+-  help
+-	define this config to control selinux log.
+diff --git a/drivers/soc/oplus/system/selinux/Makefile b/drivers/soc/oplus/system/selinux/Makefile
+deleted file mode 100755
+index 1091f1d6aaf4..000000000000
+--- a/drivers/soc/oplus/system/selinux/Makefile
++++ /dev/null
+@@ -1,4 +0,0 @@
+-# SPDX-License-Identifier: GPL-2.0-only
+-# Copyright (C) 2018-2020 Oplus. All rights reserved.
+-
+-obj-$(CONFIG_SECURITY_SELINUX) += proc.o
+diff --git a/drivers/soc/oplus/system/selinux/proc.c b/drivers/soc/oplus/system/selinux/proc.c
+deleted file mode 100755
+index fd5ebacd80c7..000000000000
+--- a/drivers/soc/oplus/system/selinux/proc.c
++++ /dev/null
+@@ -1,86 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/*
+- * Copyright (C) 2018-2020 Oplus. All rights reserved.
+- */
+-#include <linux/types.h>
+-#include <linux/errno.h>
+-#include <linux/kernel.h>
+-#include <linux/kobject.h>
+-#include <linux/init.h>
+-#include <linux/uaccess.h>
+-//#include <asm/uaccess.h>
+-#include <linux/module.h>
+-#include <linux/proc_fs.h>
+-#include <linux/seq_file.h>
+-#include <linux/slab.h>
+-
+-static int enable_audit = 0;
+-
+-static struct proc_dir_entry *denied_procdir;
+-
+-int is_avc_audit_enable(void)
+-{
+-	return enable_audit;
+-}
+-
+-static int proc_selinux_denied_show(struct seq_file *m, void *v)
+-{
+-	seq_printf(m, "selinux denied log enable is: %d\n", enable_audit);
+-
+-	return 0;
+-}
+-
+-static int proc_selinux_denied_open(struct inode *inode, struct file *file)
+-{
+-	return single_open(file, proc_selinux_denied_show, NULL);
+-}
+-
+-static ssize_t proc_selinux_denied_write(struct file *file, const char __user *buffer,
+-				   size_t count, loff_t *offp)
+-{
+-	int enable, ret;
+-	char *tmp;
+-
+-
+-	tmp = kzalloc((count + 1), GFP_KERNEL);
+-	if (!tmp) {
+-		return 0;
+-	}
+-
+-	if(copy_from_user(tmp, buffer, count)) {
+-		count = 0;
+-		goto out;
+-	}
+-
+-	ret = kstrtoint(tmp, 10, &enable);
+-	if (ret < 0) {
+-		count = 0;
+-		goto out;
+-	}
+-
+-	enable_audit = enable;
+-
+-out:
+-	kfree(tmp);
+-
+-	return count;
+-}
+-
+-static const struct file_operations proc_selinux_denied_fops = {
+-	.open		= proc_selinux_denied_open,
+-	.read		= seq_read,
+-	.write		= proc_selinux_denied_write,
+-	.llseek		= seq_lseek,
+-	.release	= single_release,
+-};
+-
+-int init_denied_proc(void)
+-{
+-	struct proc_dir_entry *denied_entry;
+-
+-	denied_procdir = proc_mkdir("fs/selinux", NULL);
+-	denied_entry = proc_create_data("enable_audit", 664, denied_procdir,
+-				&proc_selinux_denied_fops, NULL);
+-
+-	return 0;
+-}
+diff --git a/fs/exec.c b/fs/exec.c
+index cb80a15d7c3e..836ee524aa45 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1693,11 +1693,6 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 	return ret;
+ }
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#if defined(CONFIG_OPLUS_EXECVE_BLOCK) || defined(CONFIG_OPLUS_EXECVE_REPORT)
+-extern int oplus_exec_block(struct file *file);
+-#endif /* CONFIG_OPLUS_EXECVE_BLOCK or CONFIG_OPLUS_EXECVE_REPORT */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ /*
+  * sys_execve() executes a new program.
+  */
+@@ -1752,15 +1747,6 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 	if (IS_ERR(file))
+ 		goto out_unmark;
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#if defined(CONFIG_OPLUS_EXECVE_BLOCK) || defined(CONFIG_OPLUS_EXECVE_REPORT)
+-    retval = oplus_exec_block(file);
+-	if (retval){
+-		fput(file);
+-		goto out_unmark;
+-	}
+-#endif /* CONFIG_OPLUS_EXECVE_BLOCK or CONFIG_OPLUS_EXECVE_REPORT */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ 	sched_exec();
+ 
+ 	bprm->file = file;
+diff --git a/fs/namespace.c b/fs/namespace.c
+index f4684128683e..8e852fed0b60 100644
+--- a/fs/namespace.c
++++ b/fs/namespace.c
+@@ -29,13 +29,6 @@
+ 
+ #include "pnode.h"
+ #include "internal.h"
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_OPLUS_MOUNT_BLOCK
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-#include <linux/oplus_kevent.h>
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-#endif /* CONFIG_OPLUS_MOUNT_BLOCK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD*/
+ 
+ /* Maximum number of mounts in a mount namespace */
+ unsigned int sysctl_mount_max __read_mostly = 100000;
+@@ -2814,11 +2807,6 @@ char *copy_mount_string(const void __user *data)
+ 	return data ? strndup_user(data, PAGE_SIZE) : NULL;
+ }
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_OPLUS_MOUNT_BLOCK
+-extern int oplus_mount_block(const char __user *dir_name, unsigned long flags);
+-#endif /* CONFIG_OPLUS_MOUNT_BLOCK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ /*
+  * Flags is a 32-bit value that allows up to 31 non-fs dependent flags to
+  * be given to the mount() call (ie: read-only, no-dev, no-suid etc).
+@@ -2840,14 +2828,6 @@ long do_mount(const char *dev_name, const char __user *dir_name,
+ 	unsigned int mnt_flags = 0, sb_flags;
+ 	int retval = 0;
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_OPLUS_MOUNT_BLOCK
+-	retval = oplus_mount_block(dir_name, flags);
+-	if (retval < 0){
+-		return -EPERM;
+-	}
+-#endif /* CONFIG_OPLUS_MOUNT_BLOCK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ 	/* Discard magic */
+ 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
+ 		flags &= ~MS_MGC_MSK;
+diff --git a/include/linux/oplus_kevent.h b/include/linux/oplus_kevent.h
+deleted file mode 100755
+index cf6928d97f0d..000000000000
+--- a/include/linux/oplus_kevent.h
++++ /dev/null
+@@ -1,47 +0,0 @@
+-/* SPDX-License-Identifier: GPL-2.0-only */
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved.
+-* File       : oplus_kevent.h
+-* Description: For kevent action upload upload to user layer
+-* Version    : 1.0
+-* Date       :
+-* Author     :
+-* TAG        :
+-****************************************************************/
+-#ifndef _OPLUS_KEVENT_H_
+-#define _OPLUS_KEVENT_H_
+-
+-#include <linux/init.h>
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <linux/netdevice.h>
+-#include <linux/sched.h>
+-#include <linux/string.h>
+-#include <linux/skbuff.h>
+-#include <linux/types.h>
+-#include <linux/netlink.h>
+-#include <net/net_namespace.h>
+-#include <net/sock.h>
+-#include <linux/version.h>
+-
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-
+-#define NETLINK_OPLUS_KEVENT 34
+-
+-struct kernel_packet_info
+-{
+-	int type;    /* 0:root,1:only string,other number represent other type */
+-	char log_tag[32];   /* logTag */
+-	char event_id[20];    /*eventID */
+-	size_t payload_length;    /* Length of packet data */
+-	unsigned char payload[0];   /* Optional packet data */
+-}__attribute__((packed));
+-
+-int kevent_send_to_user(struct kernel_packet_info *userinfo);
+-void kernel_kevent_receive(struct sk_buff *__skbbr);
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-
+-#ifdef CONFIG_OPLUS_KEVENT_TEST
+-ssize_t demo_kevent_write(struct file *filp, const char __user *buffer, size_t count, loff_t *f_pos);
+-#endif /* CONFIG_OPLUS_KEVENT_TEST */
+-#endif
+diff --git a/include/linux/security.h b/include/linux/security.h
+index 0ec7abb1377f..666c75c2269c 100644
+--- a/include/linux/security.h
++++ b/include/linux/security.h
+@@ -1801,17 +1801,6 @@ static inline void free_secdata(void *secdata)
+ { }
+ #endif /* CONFIG_SECURITY */
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_SECURITY
+-extern int get_current_security_context(char **context, u32 *context_len);
+-#else
+-static inline int get_current_security_context(char **context, u32 *context_len)
+-{
+-	return -EOPNOTSUPP;
+-}
+-#endif
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+-
+ #ifdef CONFIG_PERF_EVENTS
+ struct perf_event_attr;
+ struct perf_event;
+diff --git a/kernel/Makefile b/kernel/Makefile
+index cdfff54f35a6..8518ff751d1a 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -56,10 +56,6 @@ obj-y += irq/
+ obj-y += rcu/
+ obj-y += livepatch/
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-obj-$(CONFIG_OPLUS_SECURE_GUARD) += keventupload/
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+-
+ obj-$(CONFIG_CHECKPOINT_RESTORE) += kcmp.o
+ obj-$(CONFIG_FREEZER) += freezer.o
+ obj-$(CONFIG_PROFILING) += profile.o
+diff --git a/kernel/keventupload/Makefile b/kernel/keventupload/Makefile
+deleted file mode 100755
+index 93445a071d6c..000000000000
+--- a/kernel/keventupload/Makefile
++++ /dev/null
+@@ -1,4 +0,0 @@
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-obj-$(CONFIG_OPLUS_KEVENT_UPLOAD) += oplus_kevent_upload.o
+-obj-$(CONFIG_OPLUS_KEVENT_TEST)   += oplus_kevent_test.o
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+\ No newline at end of file
+diff --git a/kernel/keventupload/oplus_kevent_test.c b/kernel/keventupload/oplus_kevent_test.c
+deleted file mode 100755
+index 154f89bf938e..000000000000
+--- a/kernel/keventupload/oplus_kevent_test.c
++++ /dev/null
+@@ -1,300 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved..
+-* File       : oplus_kevent_test.c
+-* Description: For kevent action upload upload to user layer test
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#include <linux/delay.h>
+-#include <linux/module.h>
+-#include <linux/sched.h>
+-#include <linux/fs.h>
+-#include <linux/proc_fs.h>
+-#include <linux/seq_file.h>
+-#include <linux/uaccess.h>
+-#include <linux/string.h>
+-#include <linux/kernel.h>
+-
+-#include <linux/oplus_kevent.h>
+-#include <linux/genhd.h>
+-
+-#ifdef CONFIG_OPLUS_KEVENT_TEST
+-#define MAX_PAYLOAD_LENGTH  2560
+-static char *str = NULL;
+-/*
+-struct payload
+-{
+-	uid_t uid;
+-}__attribute__((packed));
+-
+-
+-static int atoi(const char *str)
+-{
+-	int num = 0;
+-	if (strlen(str) < 1)
+-	{
+-		return -1;
+-	}
+-
+-	while (*str <= '9' && *str >= '0')
+-	{
+-		num = num * 10 + *str - '0';
+-		str++;
+-	}
+-	return num;
+-}
+-
+-int kevent_proc_show(struct seq_file *m, void *v)
+-{
+-	struct kernel_packet_info *user_msg_info;
+-	struct payload *payload_uid;
+-	char log_tag[32] = "2100001";
+-	char event_id[32] = "user_location";
+-	void* buffer = NULL;
+-	int size;
+-	int value;
+-
+-	seq_printf(m, "%s", str);
+-
+-	size = sizeof(struct kernel_packet_info) + sizeof(struct payload);
+-	printk(KERN_INFO "kevent_send_to_user, kevent_proc_show:size=%d\n", size);
+-	buffer = kmalloc(size, GFP_ATOMIC);
+-	memset(buffer, 0, size);
+-	user_msg_info = (struct kernel_packet_info *)buffer;
+-	user_msg_info->type = 0;
+-
+-	memcpy(user_msg_info->log_tag, log_tag, strlen(log_tag) + 1);
+-	memcpy(user_msg_info->event_id, event_id, strlen(event_id) + 1);
+-
+-	user_msg_info->payload_length = sizeof(struct payload);
+-
+-	payload_uid = (struct payload *)(buffer + sizeof(struct kernel_packet_info));
+-
+-	value = atoi(str);
+-
+-	payload_uid->uid = value;
+-	printk(KERN_INFO "kevent_send_to_user, kevent_proc_show:value=%d\n", value);
+-	printk(KERN_INFO "kevent_send_to_user, kevent_proc_show:payload_uid->uid=%d\n", payload_uid->uid);
+-
+-	//do_mount("/dev/block/bootdevice/by-name/system", "/system", "ext4", ~MS_RDONLY, NULL);
+-
+-	kevent_send_to_user(user_msg_info);
+-
+-	msleep(20);
+-
+-	kfree(buffer);
+-
+-	return 0;
+-}
+-*/
+-
+-static int kevent_proc_show(struct seq_file *m, void *v)
+-{
+-	struct kernel_packet_info *user_msg_info;
+-	char log_tag[32] = "2100001";
+-	char event_id[32] = "user_location";
+-	void* buffer = NULL;
+-	int len, size;
+-
+-	seq_printf(m, "%s", str);
+-
+-	len = strlen(str);
+-
+-	size = sizeof(struct kernel_packet_info) + len + 1;
+-
+-	buffer = kmalloc(size, GFP_ATOMIC);
+-	memset(buffer, 0, size);
+-	user_msg_info = (struct kernel_packet_info *)buffer;
+-	user_msg_info->type = 2;
+-
+-	memcpy(user_msg_info->log_tag, log_tag, strlen(log_tag) + 1);
+-	memcpy(user_msg_info->event_id, event_id, strlen(event_id) + 1);
+-
+-	user_msg_info->payload_length = len + 1;
+-	memcpy(user_msg_info->payload, str, len + 1);
+-
+-	//kevent_send_to_user(user_msg_info);
+-	msleep(20);
+-	kfree(buffer);
+-	return 0;
+-}
+-
+-/*
+-static int kevent_proc_show(struct seq_file *m, void *v)
+-{
+-	struct kernel_packet_info *user_msg_info;
+-	char log_tag[32] = "2100001";
+-	char event_id[32] = "user_location";
+-	void* buffer = NULL;
+-	int len, size;
+-
+-	seq_printf(m, "%s", str);
+-
+-	len = strlen(str);
+-
+-	size = sizeof(struct kernel_packet_info) + len + 1;
+-	printk(KERN_INFO "kevent_send_to_user, kevent_proc_show:size=%d\n", size);
+-
+-	buffer = kmalloc(size, GFP_ATOMIC);
+-	memset(buffer, 0, size);
+-	user_msg_info = (struct kernel_packet_info *)buffer;
+-	user_msg_info->type = 1;
+-
+-	memcpy(user_msg_info->log_tag, log_tag, strlen(log_tag) + 1);
+-	memcpy(user_msg_info->event_id, event_id, strlen(event_id) + 1);
+-
+-	user_msg_info->payload_length = len + 1;
+-	memcpy(user_msg_info->payload, str, len + 1);
+-
+-	kevent_send_to_user(user_msg_info);
+-	msleep(20);
+-	kfree(buffer);
+-	return 0;
+-}
+-*/
+-/*
+-* file_operations->open
+-*/
+-static int kevent_proc_open(struct inode *inode, struct file *file)
+-{
+-	return single_open(file, kevent_proc_show, NULL);
+-}
+-
+-/*
+-* file_operations->write
+-*/
+-/*
+-static ssize_t kevent_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
+-{
+-	char *tmp = kzalloc((count + 1), GFP_KERNEL);
+-	if (!tmp) {
+-		return -ENOMEM;
+-	}
+-
+-	if (copy_from_user(tmp, buffer, count)) {
+-		kfree(tmp);
+-		return -EFAULT;
+-	}
+-
+-	str = tmp;
+-
+-	return count;
+-}
+-*/
+-/*
+-static ssize_t kevent_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
+-{
+-	char *str = "/dev/block/platform/soc/c0c4000.sdhci/by-name";
+-	char *tmp = kzalloc(strlen(str) + count, GFP_KERNEL);
+-	if (!tmp)
+-		return -ENOMEM;
+-
+-	memcpy(tmp, str, strlen(str));
+-
+-	if (copy_from_user(tmp + strlen(str), buffer, count)) {
+-		kfree(tmp);
+-		return -EFAULT;
+-	}
+-
+-	printk("device name=%s\n", tmp);
+-	do_mount(tmp, buffer, "ext4", ~MS_RDONLY, NULL);
+-
+-	kfree(tmp);
+-
+-	return count;
+-}
+-*/
+-static ssize_t kevent_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
+-{
+-	char *tmp = kzalloc((count + 1), GFP_KERNEL);
+-	char testbuf[32];
+-	int n = 0;
+-	struct block_device *bdev = NULL;
+-	if (!tmp) {
+-		return -ENOMEM;
+-	}
+-
+-	if (put_user('\0', (char __user *)buffer + count - 1)) {
+-		return -EFAULT;
+-	}
+-
+-	if (copy_from_user(tmp, buffer, count)) {
+-		kfree(tmp);
+-		return -EFAULT;
+-	}
+-
+-	n = strlen(tmp);
+-	memcpy(testbuf, tmp, n);
+-
+-	printk(KERN_INFO "kevent_send_to_user,before kevent_proc_write call do_mount\n");
+-	do_mount("/dev/block/platform/soc/c0c4000.sdhci/by-name/system", buffer, "ext4", ~MS_RDONLY, NULL);
+-
+-	bdev = lookup_bdev("/dev/block/platform/soc/c0c4000.sdhci/by-name/vendor");
+-	bdev = lookup_bdev("/dev/block/mmcblk0p67");
+-	bdev = lookup_bdev("/dev/block/bootdevice/by-name/vendor");
+-	printk(KERN_INFO "kevent_send_to_user,after kevent_proc_write call do_mount\n");
+-
+-	str = tmp;
+-	return count;
+-}
+-
+-/*
+-* file_operations->read
+-*/
+-/*
+-static ssize_t kevent_proc_read(struct file *file, const char __user *buffer, size_t count, loff_t *f_pos)
+-{
+-	char *tmp = kzalloc((count + 1), GFP_KERNEL);
+-	if (!tmp) {
+-		return -ENOMEM;
+-	}
+-
+-	if (copy_to_user(tmp, buffer, count)) {
+-		kfree(tmp);
+-		count=-EFAULT;
+-	}
+-
+-	str = tmp;
+-	return count;
+-}
+-*/
+-static struct file_operations kevent_fops = {
+-	.open = kevent_proc_open,
+-	.release = single_release,
+-	.read = seq_read,
+-	.llseek = seq_lseek,
+-	.write = kevent_proc_write,
+-};
+-
+-static int __init kevent_init(void)
+-{
+-	struct proc_dir_entry* file;
+-
+-	/* create proc and file_operations */
+-	file = proc_create("kevent", 0666, NULL, &kevent_fops);
+-	if (!file) {
+-		return -ENOMEM;
+-	}
+-
+-	str = kzalloc((MAX_PAYLOAD_LENGTH + 1), GFP_KERNEL);
+-	memset(str, 0, MAX_PAYLOAD_LENGTH);
+-	strcpy(str, "kevent");
+-
+-	return 0;
+-}
+-
+-static void __exit kevent_exit(void)
+-{
+-	remove_proc_entry("kevent", NULL);
+-	kfree(str);
+-}
+-
+-module_init(kevent_init);
+-module_exit(kevent_exit);
+-
+-MODULE_LICENSE("GPL");
+-#endif /* CONFIG_OPLUS_KEVENT_TEST */
+-
+diff --git a/kernel/keventupload/oplus_kevent_upload.c b/kernel/keventupload/oplus_kevent_upload.c
+deleted file mode 100755
+index c46c6fc70abd..000000000000
+--- a/kernel/keventupload/oplus_kevent_upload.c
++++ /dev/null
+@@ -1,146 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-/**************************************************************
+-* Copyright (c)  2008- 2020  Oplus. All rights reserved.
+-* File       : oplus_kevent_upload.c
+-* Description: for kevent action upload,root action upload to user layer
+-* Version   : 1.0
+-* Date        : 2019-12-19
+-* Author    :
+-* TAG         :
+-****************************************************************/
+-#include <linux/init.h>
+-#include <linux/kernel.h>
+-#include <linux/module.h>
+-#include <linux/netdevice.h>
+-#include <linux/sched.h>
+-#include <linux/string.h>
+-#include <linux/skbuff.h>
+-#include <linux/types.h>
+-#include <linux/netlink.h>
+-#include <net/net_namespace.h>
+-#include <linux/proc_fs.h>
+-#include <net/sock.h>
+-#include <linux/vmalloc.h>
+-#include <linux/version.h>
+-#include <linux/uaccess.h>
+-
+-#include <linux/oplus_kevent.h>
+-
+-#ifdef CONFIG_OPLUS_KEVENT_UPLOAD
+-
+-static struct sock *netlink_fd = NULL;
+-static volatile u32 kevent_pid;
+-
+-/* send to user space */
+-int kevent_send_to_user(struct kernel_packet_info *userinfo)
+-{
+-	int ret, size, size_use;
+-	unsigned int o_tail;
+-	struct sk_buff *skbuff;
+-	struct nlmsghdr *nlh;
+-	struct kernel_packet_info *packet;
+-
+-	/* protect payload too long problem*/
+-	if (userinfo->payload_length >= 2048) {
+-		printk(KERN_ERR "kevent_send_to_user: payload_length out of range\n");
+-		return -1;
+-	}
+-
+-	size = NLMSG_SPACE(sizeof(struct kernel_packet_info) + userinfo->payload_length);
+-
+-	/*allocate new buffer cache */
+-	skbuff = alloc_skb(size, GFP_ATOMIC);
+-	if (skbuff == NULL) {
+-		printk(KERN_ERR "kevent_send_to_user: skbuff alloc_skb failed\n");
+-		return -1;
+-	}
+-
+-	/* fill in the data structure */
+-	nlh = nlmsg_put(skbuff, 0, 0, 0, size - sizeof(*nlh), 0);
+-	if (nlh == NULL) {
+-		printk(KERN_ERR "nlmsg_put failaure\n");
+-		nlmsg_free(skbuff);
+-		return -1;
+-	}
+-
+-	o_tail = skbuff->tail;
+-
+-	size_use = sizeof(struct kernel_packet_info) + userinfo->payload_length;
+-
+-	/* use struct kernel_packet_info for data of nlmsg */
+-	packet = NLMSG_DATA(nlh);
+-	memset(packet, 0, size_use);
+-
+-	/* copy the payload content */
+-	memcpy(packet, userinfo, size_use);
+-
+-	//compute nlmsg length
+-	nlh->nlmsg_len = skbuff->tail - o_tail;
+-
+-	/* set control field,sender's pid */
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0))
+-	NETLINK_CB(skbuff).pid = 0;
+-#else
+-	NETLINK_CB(skbuff).portid = 0;
+-#endif
+-
+-	NETLINK_CB(skbuff).dst_group = 0;
+-
+-	/* send data */
+-	ret = netlink_unicast(netlink_fd, skbuff, kevent_pid, MSG_DONTWAIT);
+-	if(ret < 0){
+-		//printk(KERN_ERR "kevent_send_to_user:netlink_unicast: can not unicast skbuff\n");
+-		printk(KERN_ERR "kevent_send_to_user:netlink_unicast: can not unicast skbuff, ret is %d \n", ret);
+-		return 1;
+-	}
+-
+-	return 0;
+-}
+-
+-EXPORT_SYMBOL(kevent_send_to_user);
+-
+-/* kernel receive message from user space */
+-void kernel_kevent_receive(struct sk_buff *__skbbr)
+-{
+-	struct sk_buff *skbu;
+-	struct nlmsghdr *nlh = NULL;
+-
+-	skbu = skb_get(__skbbr);
+-
+-	if (skbu->len >= sizeof(struct nlmsghdr)) {
+-		nlh = (struct nlmsghdr *)skbu->data;
+-		if((nlh->nlmsg_len >= sizeof(struct nlmsghdr))
+-			&& (__skbbr->len >= nlh->nlmsg_len)){
+-			kevent_pid = nlh->nlmsg_pid;
+-			printk(KERN_ERR "[KEVENT_UPLOAD]kevent_pid is %u ..\n", kevent_pid);
+-		}
+-	}
+-	kfree_skb(skbu);
+-}
+-
+-int __init netlink_kevent_init(void)
+-{
+-	struct netlink_kernel_cfg cfg = {
+-		.groups = 0,
+-		.input  = kernel_kevent_receive,
+-	};
+-
+-	netlink_fd = netlink_kernel_create(&init_net, NETLINK_OPLUS_KEVENT, &cfg);
+-	if (!netlink_fd) {
+-		printk(KERN_ERR "[KEVENT_UPLOAD]Can not create a netlink socket\n");
+-		return -1;
+-	}
+-	return 0;
+-}
+-
+-void __exit netlink_kevent_exit(void)
+-{
+-	sock_release(netlink_fd->sk_socket);
+-}
+-
+-module_init(netlink_kevent_init);
+-module_exit(netlink_kevent_exit);
+-MODULE_LICENSE("GPL");
+-
+-#endif /* CONFIG_OPLUS_KEVENT_UPLOAD */
+-
+diff --git a/net/socket.c b/net/socket.c
+index e51b8a530831..ebfe401dacd4 100644
+--- a/net/socket.c
++++ b/net/socket.c
+@@ -2080,11 +2080,6 @@ static int ___sys_sendmsg(struct socket *sock, struct user_msghdr __user *msg,
+ 
+ out_freectl:
+ 	if (ctl_buf != ctl){
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-#ifdef CONFIG_OPLUS_ROOT_CHECK
+-		memset(ctl_buf, 0, ctl_len);
+-#endif /* CONFIG_OPLUS_ROOT_CHECK */
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+ 		sock_kfree_s(sock->sk, ctl_buf, ctl_len);
+ 	}
+ out_freeiov:
+diff --git a/oplus_native_features.sh b/oplus_native_features.sh
+index 59edf7e1ad96..8d1f8f0ab900 100644
+--- a/oplus_native_features.sh
++++ b/oplus_native_features.sh
+@@ -1,5 +1,5 @@
+ #!/bin/bash
+-export OPLUS_NATIVE_FEATURE_SET="OPLUS_BUG_STABILITY OPLUS_BUG_COMPATIBILITY OPLUS_BUG_DEBUG OPLUS_ARCH_INJECT OPLUS_ARCH_EXTENDS VENDOR_EDIT OPLUS_FEATURE_PLATFORM OPLUS_FEATURE_PERFORMANCE OPLUS_FEATURE_ENGINEERTOOLS OPLUS_FEATURE_SELINUX_CONTROL_LOG OPLUS_FEATURE_SELINUX_DEBUG_BUILD OPLUS_FEATURE_SELINUX_CONTEXTS OPLUS_FEATURE_DYNAMIC_KEYMAP OPLUS_FEATURE_DROP_STATUSBAR OPLUS_FEATURE_GESTURE_SCREENSHOT OPLUS_FEATURE_STORAGE OPLUS_FEATURE_STORAGE_MOUNT OPLUS_FEATURE_STORAGE_RESIZE OPLUS_FEATURE_STORAGE_TRIM OPLUS_FEATURE_STORAGE_FBE OPLUS_FEATURE_STORAGE_MTP OPLUS_FEATURE_STORAGE_RESERVEPARTITION OPLUS_FEATURE_STORAGE_USB OPLUS_FEATURE_STORAGE_CUSTOMIZE_PARTITION OPLUS_FEATURE_STORAGE_FDE OPLUS_FEATURE_STORAGE_AUTOMATIC_TIMING OPLUS_BUG_UPDATABILITY OPLUS_FEATURE_RECOVERY_BUILD OPLUS_FEATURE_RECOVERY_BOOT OPLUS_FEATURE_RECOVERY_UI OPLUS_FEATURE_RECOVERY_RESET OPLUS_FEATURE_OTAPACKAGE_BUILD OPLUS_FEATURE_OTAPACKAGE_UPDATER OPLUS_FEATURE_OTAPACKAGE_SCRIPT OPLUS_FEATURE_BOOTANIMATION OPLUS_FEATURE_SECURE_GUARD OPLUS_FEATURE_SECURE_ROOTGUARD OPLUS_FEATURE_SECURE_MOUNTGUARD OPLUS_FEATURE_SECURE_EXECGUARD OPLUS_FEATURE_SECURE_KEVENTUPLOAD OPLUS_FEATURE_ENGINEERING_FILEACCESS OPLUS_FEATURE_ORMS OPLUS_FEATURE_MAINLINE OPLUS_FEATURE_CLOUD_COMPILE OPLUS_FEATURE_PMS_EXCEPTION_FIX OPLUS_FEATURE_PMS_BOOT_TIME_OPT OPLUS_FEATURE_CTS_FINGERPRINT OPLUS_FEATURE_RECOVERY_BOOT_REASON OPLUS_FEATURE_OP_RECOVERY OPLUS_FEATURE_SHUTDOWN_DETECT OPLUS_FEATURE_PHOENIX OPLUS_FEATURE_AGINGTEST OPLUS_FEATURE_FINGERPRINT OPLUS_FEATURE_FINGERPRINTPAY FP_HBM_BRIGHTNESS_DELAY FP_CONFIG_HYPNUSD_ENABLE FP_DCS_ENABLE FP_OPLUS_PLATFORMCPU_ALL8_BIG4567 FP_GOODIX_OPTICAL_SUPPORT FP_SETTINGS_ENABLE OPLUS_CUSTOM_ENCRYPT_ENABLE FP_CONFIG_BINDCORE_BYTID FP_CONFIG_SET_PRIORITY FP_CONFIG_SET_UXTHREAD OPLUS_FEATURE_FACERECOGNITION FACE_TEE_RUNTIME LOW_ST_BUFFER_SIZE FACE_CONFIG_CPU_VERSION FACE_PICTURE_ENCTRYPTED_CONFIG OPLUS_PLATFORMCPU_ALL8_BIG4567 FACE_DCS_ENABLE OPLUS_NOT_SUPPORT_FREE_FALL OPLUS_FEATURE_SENSOR_NOT_SUPPORT_CAMERA_PROTECT OPLUS_FEATURE_SENSOR OPLUS_FEATURE_SENSOR_ALGORITHM OPLUS_FEATURE_HEALTHINFO OPLUS_FEATURE_SCHED_ASSIST OPLUS_FEATURE_PROCESS_RECLAIM OPLUS_FEATURE_FG_IO_OPT OPLUS_FEATURE_MEMLEAK_DETECT OPLUS_FEATURE_CORE_CTL OPLUS_FEATURE_TP_BASIC OPLUS_FEATURE_TP_BSPFWUPDATE OPLUS_FEATURE_MULTI_KSWAPD OPLUS_FEATURE_ZRAM_OPT OPLUS_FEATURE_EXFAT_SUPPORT OPLUS_FEATURE_SDCARDFS_SUPPORT OPLUS_FEATURE_CHG_BASIC OPLUS_FEATURE_MULTI_FREEAREA OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY OPLUS_FEATURE_ACTIVITY_RECOGNITION OPLUS_FEATURE_ELEVATOR_DETECT OPLUS_FEATURE_STORAGE_TOOL OPLUS_FEATURE_NEW_FTMFLASHLIGHT_NODE OPLUS_ARCH_EXTENDS_CAM_TUNING_LIB OPLUS_ARCH_EXTENDS_CAM_TUNING_PARAMS OPLUS_FEATURE_CAMERA_COMMON OPLUS_FEATURE_WIFI_DATASTALL OPLUS_FEATURE_WIFI_MTUDETECT OPLUS_FEATURE_WIFI_SLA OPLUS_FEATURE_WIFI_GBK OPLUS_FEATURE_IPV6_OPTIMIZE OPLUS_FEATURE_WIFI_DUALSTA OPLUS_FEATURE_WIFI_OSHARE OPLUS_FEATURE_WIFI_SUPPLICANTHIDL OPLUS_FEATURE_WIFI_SMART_BW OPLUS_FEATURE_WIFI_LIMMITBGSPEED OPLUS_FEATURE_BT_INTEROPLIST OPLUS_FEATURE_BT_FW_OVERRIDE_MTK OPLUS_FEATURE_BT_FW_SSRDUMP OPLUS_FEATURE_BT_FW_SAU_MTK OPLUS_FEATURE_FONT_FLIP OPLUS_FEATURE_MOTION_INTERCEPT OPLUS_FEATURE_LINKERCONFIG_CUSTOM OPLUS_FEATURE_RESOURCES_COMPILE OPLUS_FEATURE_DARKMODE OPLUS_FEATURE_DUMP_SENSOR OPLUS_FEATURE_GAMEECO_COOLEFFECT OPLUS_FEATURE_ATLAS OPLUS_FEATURE_AUDIO_FTM OPLUS_FEATURE_AUDIOSERVER_DEBUG OPLUS_FEATURE_VIP_RECORD OPLUS_FEATURE_PA_DUMMY OPLUS_FEATURE_SMARTVOL OPLUS_FEATURE_VOIP_ENHANCE OPLUS_FEATURE_KTV OPLUS_FEATURE_LVIMFS_SUPPORT OPLUS_FEATURE_PLAYBACKCAPTURE OPLUS_FEATURE_GAME_MUTE OPLUS_FEATURE_VOICE_CHANGER OPLUS_FEATURE_VIBRING_SYNC OPLUS_FEATURE_INPUTCHANNEL_CHOICE OPLUS_FEATURE_AUDIOVOICE_SCENCE OPLUS_FEATURE_DOLBY OPLUS_FEATURE_DIRAC OPLUS_FEATURE_OPERATOR_RINGTONE OPLUS_FEATURE_CAMERASOUND_FORCE OPLUS_FEATURE_FORBID_RECORD OPLUS_FEATURE_SPEAKER_MUTE OPLUS_FEATURE_SSR OPLUS_FEATURE_AUDIO_LOWLATENCY OPLUS_FEATURE_GAME_AUDIO_EFFECTS OPLUS_FEATURE_VOICE_WAKEUP OPLUS_FEATURE_VOICE_WAKEUP_LOG_ENABLE OPLUS_FEATURE_CUSTOM_SCENE OPLUS_FEATURE_CTS_AEC OPLUS_FEATURE_MULTISCENE_RECORD OPLUS_FEATURE_AUDIO_DUMP OPLUS_FEATURE_AEC_RECORD OPLUS_FEATURE_OPLUS_AVENHANCEMENT OPLUS_FEATURE_APE_DECODER OPLUS_FEATURE_VIDEO_TITLE OPLUS_FEATURE_MP3_RECORDER OPLUS_FEATURE_FFMPEG_INTEGRATION OPLUS_FEATURE_FEEDBACK_INFO OPLUS_FEATURE_IMAGE_PROCESSING OPLUS_FEATURE_ZEN_MODE OPLUS_FEATURE_DRM_HDCP OPLUS_FEATURE_ONSCREENFINGERPRINT OPLUS_FEATURE_DC OPLUS_FEATURE_AOD OPLUS_FEATURE_DRE OPLUS_FEATURE_OSC OPLUS_FEATURE_AUTOBRIGHTNESS OPLUS_FEATURE_GPU_MINIDUMP OPLUS_FEATURE_SCREENSHOT OPLUS_FEATURE_OSIE OPLUS_FEATURE_VPP OPLUS_FEATURE_GAME_OIFACE OPLUS_FEATURE_PLATFORM_MTK OPLUS_NATIVE_MACRO_FEATURES TARGET_PRODUCT"
++export OPLUS_NATIVE_FEATURE_SET="OPLUS_BUG_STABILITY OPLUS_BUG_COMPATIBILITY OPLUS_BUG_DEBUG OPLUS_ARCH_INJECT OPLUS_ARCH_EXTENDS VENDOR_EDIT OPLUS_FEATURE_PLATFORM OPLUS_FEATURE_PERFORMANCE OPLUS_FEATURE_ENGINEERTOOLS OPLUS_FEATURE_SELINUX_DEBUG_BUILD OPLUS_FEATURE_SELINUX_CONTEXTS OPLUS_FEATURE_DYNAMIC_KEYMAP OPLUS_FEATURE_DROP_STATUSBAR OPLUS_FEATURE_GESTURE_SCREENSHOT OPLUS_FEATURE_STORAGE OPLUS_FEATURE_STORAGE_MOUNT OPLUS_FEATURE_STORAGE_RESIZE OPLUS_FEATURE_STORAGE_TRIM OPLUS_FEATURE_STORAGE_FBE OPLUS_FEATURE_STORAGE_MTP OPLUS_FEATURE_STORAGE_RESERVEPARTITION OPLUS_FEATURE_STORAGE_USB OPLUS_FEATURE_STORAGE_CUSTOMIZE_PARTITION OPLUS_FEATURE_STORAGE_FDE OPLUS_FEATURE_STORAGE_AUTOMATIC_TIMING OPLUS_BUG_UPDATABILITY OPLUS_FEATURE_RECOVERY_BUILD OPLUS_FEATURE_RECOVERY_BOOT OPLUS_FEATURE_RECOVERY_UI OPLUS_FEATURE_RECOVERY_RESET OPLUS_FEATURE_OTAPACKAGE_BUILD OPLUS_FEATURE_OTAPACKAGE_UPDATER OPLUS_FEATURE_OTAPACKAGE_SCRIPT OPLUS_FEATURE_BOOTANIMATION OPLUS_FEATURE_ENGINEERING_FILEACCESS OPLUS_FEATURE_ORMS OPLUS_FEATURE_MAINLINE OPLUS_FEATURE_CLOUD_COMPILE OPLUS_FEATURE_PMS_EXCEPTION_FIX OPLUS_FEATURE_PMS_BOOT_TIME_OPT OPLUS_FEATURE_CTS_FINGERPRINT OPLUS_FEATURE_RECOVERY_BOOT_REASON OPLUS_FEATURE_OP_RECOVERY OPLUS_FEATURE_SHUTDOWN_DETECT OPLUS_FEATURE_PHOENIX OPLUS_FEATURE_AGINGTEST OPLUS_FEATURE_FINGERPRINT OPLUS_FEATURE_FINGERPRINTPAY FP_HBM_BRIGHTNESS_DELAY FP_CONFIG_HYPNUSD_ENABLE FP_DCS_ENABLE FP_OPLUS_PLATFORMCPU_ALL8_BIG4567 FP_GOODIX_OPTICAL_SUPPORT FP_SETTINGS_ENABLE OPLUS_CUSTOM_ENCRYPT_ENABLE FP_CONFIG_BINDCORE_BYTID FP_CONFIG_SET_PRIORITY FP_CONFIG_SET_UXTHREAD OPLUS_FEATURE_FACERECOGNITION FACE_TEE_RUNTIME LOW_ST_BUFFER_SIZE FACE_CONFIG_CPU_VERSION FACE_PICTURE_ENCTRYPTED_CONFIG OPLUS_PLATFORMCPU_ALL8_BIG4567 FACE_DCS_ENABLE OPLUS_NOT_SUPPORT_FREE_FALL OPLUS_FEATURE_SENSOR_NOT_SUPPORT_CAMERA_PROTECT OPLUS_FEATURE_SENSOR OPLUS_FEATURE_SENSOR_ALGORITHM OPLUS_FEATURE_HEALTHINFO OPLUS_FEATURE_SCHED_ASSIST OPLUS_FEATURE_PROCESS_RECLAIM OPLUS_FEATURE_FG_IO_OPT OPLUS_FEATURE_MEMLEAK_DETECT OPLUS_FEATURE_CORE_CTL OPLUS_FEATURE_TP_BASIC OPLUS_FEATURE_TP_BSPFWUPDATE OPLUS_FEATURE_MULTI_KSWAPD OPLUS_FEATURE_ZRAM_OPT OPLUS_FEATURE_EXFAT_SUPPORT OPLUS_FEATURE_SDCARDFS_SUPPORT OPLUS_FEATURE_CHG_BASIC OPLUS_FEATURE_MULTI_FREEAREA OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY OPLUS_FEATURE_ACTIVITY_RECOGNITION OPLUS_FEATURE_ELEVATOR_DETECT OPLUS_FEATURE_STORAGE_TOOL OPLUS_FEATURE_NEW_FTMFLASHLIGHT_NODE OPLUS_ARCH_EXTENDS_CAM_TUNING_LIB OPLUS_ARCH_EXTENDS_CAM_TUNING_PARAMS OPLUS_FEATURE_CAMERA_COMMON OPLUS_FEATURE_WIFI_DATASTALL OPLUS_FEATURE_WIFI_MTUDETECT OPLUS_FEATURE_WIFI_SLA OPLUS_FEATURE_WIFI_GBK OPLUS_FEATURE_IPV6_OPTIMIZE OPLUS_FEATURE_WIFI_DUALSTA OPLUS_FEATURE_WIFI_OSHARE OPLUS_FEATURE_WIFI_SUPPLICANTHIDL OPLUS_FEATURE_WIFI_SMART_BW OPLUS_FEATURE_WIFI_LIMMITBGSPEED OPLUS_FEATURE_BT_INTEROPLIST OPLUS_FEATURE_BT_FW_OVERRIDE_MTK OPLUS_FEATURE_BT_FW_SSRDUMP OPLUS_FEATURE_BT_FW_SAU_MTK OPLUS_FEATURE_FONT_FLIP OPLUS_FEATURE_MOTION_INTERCEPT OPLUS_FEATURE_LINKERCONFIG_CUSTOM OPLUS_FEATURE_RESOURCES_COMPILE OPLUS_FEATURE_DARKMODE OPLUS_FEATURE_DUMP_SENSOR OPLUS_FEATURE_GAMEECO_COOLEFFECT OPLUS_FEATURE_ATLAS OPLUS_FEATURE_AUDIO_FTM OPLUS_FEATURE_AUDIOSERVER_DEBUG OPLUS_FEATURE_VIP_RECORD OPLUS_FEATURE_PA_DUMMY OPLUS_FEATURE_SMARTVOL OPLUS_FEATURE_VOIP_ENHANCE OPLUS_FEATURE_KTV OPLUS_FEATURE_LVIMFS_SUPPORT OPLUS_FEATURE_PLAYBACKCAPTURE OPLUS_FEATURE_GAME_MUTE OPLUS_FEATURE_VOICE_CHANGER OPLUS_FEATURE_VIBRING_SYNC OPLUS_FEATURE_INPUTCHANNEL_CHOICE OPLUS_FEATURE_AUDIOVOICE_SCENCE OPLUS_FEATURE_DOLBY OPLUS_FEATURE_DIRAC OPLUS_FEATURE_OPERATOR_RINGTONE OPLUS_FEATURE_CAMERASOUND_FORCE OPLUS_FEATURE_FORBID_RECORD OPLUS_FEATURE_SPEAKER_MUTE OPLUS_FEATURE_SSR OPLUS_FEATURE_AUDIO_LOWLATENCY OPLUS_FEATURE_GAME_AUDIO_EFFECTS OPLUS_FEATURE_VOICE_WAKEUP OPLUS_FEATURE_VOICE_WAKEUP_LOG_ENABLE OPLUS_FEATURE_CUSTOM_SCENE OPLUS_FEATURE_CTS_AEC OPLUS_FEATURE_MULTISCENE_RECORD OPLUS_FEATURE_AUDIO_DUMP OPLUS_FEATURE_AEC_RECORD OPLUS_FEATURE_OPLUS_AVENHANCEMENT OPLUS_FEATURE_APE_DECODER OPLUS_FEATURE_VIDEO_TITLE OPLUS_FEATURE_MP3_RECORDER OPLUS_FEATURE_FFMPEG_INTEGRATION OPLUS_FEATURE_FEEDBACK_INFO OPLUS_FEATURE_IMAGE_PROCESSING OPLUS_FEATURE_ZEN_MODE OPLUS_FEATURE_DRM_HDCP OPLUS_FEATURE_ONSCREENFINGERPRINT OPLUS_FEATURE_DC OPLUS_FEATURE_AOD OPLUS_FEATURE_DRE OPLUS_FEATURE_OSC OPLUS_FEATURE_AUTOBRIGHTNESS OPLUS_FEATURE_GPU_MINIDUMP OPLUS_FEATURE_SCREENSHOT OPLUS_FEATURE_OSIE OPLUS_FEATURE_VPP OPLUS_FEATURE_GAME_OIFACE OPLUS_FEATURE_PLATFORM_MTK OPLUS_NATIVE_MACRO_FEATURES TARGET_PRODUCT"
+ export OPLUS_BUG_STABILITY=yes
+ export OPLUS_BUG_COMPATIBILITY=yes
+ export OPLUS_BUG_DEBUG=yes
+@@ -9,7 +9,6 @@ export VENDOR_EDIT=yes
+ export OPLUS_FEATURE_PLATFORM=MTK
+ export OPLUS_FEATURE_PERFORMANCE=yes
+ export OPLUS_FEATURE_ENGINEERTOOLS=true
+-export OPLUS_FEATURE_SELINUX_CONTROL_LOG=true
+ export OPLUS_FEATURE_SELINUX_DEBUG_BUILD=true
+ export OPLUS_FEATURE_SELINUX_CONTEXTS=true
+ export OPLUS_FEATURE_DYNAMIC_KEYMAP=yes
+@@ -35,11 +34,6 @@ export OPLUS_FEATURE_OTAPACKAGE_BUILD=yes
+ export OPLUS_FEATURE_OTAPACKAGE_UPDATER=yes
+ export OPLUS_FEATURE_OTAPACKAGE_SCRIPT=yes
+ export OPLUS_FEATURE_BOOTANIMATION=yes
+-export OPLUS_FEATURE_SECURE_GUARD=yes
+-export OPLUS_FEATURE_SECURE_ROOTGUARD=yes
+-export OPLUS_FEATURE_SECURE_MOUNTGUARD=yes
+-export OPLUS_FEATURE_SECURE_EXECGUARD=yes
+-export OPLUS_FEATURE_SECURE_KEVENTUPLOAD=yes
+ export OPLUS_FEATURE_ENGINEERING_FILEACCESS=yes
+ export OPLUS_FEATURE_ORMS=yes
+ export OPLUS_FEATURE_MAINLINE=yes
+@@ -170,5 +164,5 @@ export OPLUS_FEATURE_OSIE=yes
+ export OPLUS_FEATURE_VPP=yes
+ export OPLUS_FEATURE_GAME_OIFACE=yes
+ export OPLUS_FEATURE_PLATFORM_MTK=yes
+-export OPLUS_NATIVE_MACRO_FEATURES=OPLUS_BUG_STABILITY OPLUS_BUG_COMPATIBILITY OPLUS_BUG_DEBUG OPLUS_ARCH_INJECT OPLUS_ARCH_EXTENDS VENDOR_EDIT OPLUS_FEATURE_PLATFORM OPLUS_FEATURE_PERFORMANCE OPLUS_FEATURE_ENGINEERTOOLS OPLUS_FEATURE_SELINUX_CONTROL_LOG OPLUS_FEATURE_SELINUX_DEBUG_BUILD OPLUS_FEATURE_SELINUX_CONTEXTS OPLUS_FEATURE_DYNAMIC_KEYMAP OPLUS_FEATURE_DROP_STATUSBAR OPLUS_FEATURE_GESTURE_SCREENSHOT OPLUS_FEATURE_STORAGE OPLUS_FEATURE_STORAGE_MOUNT OPLUS_FEATURE_STORAGE_RESIZE OPLUS_FEATURE_STORAGE_TRIM OPLUS_FEATURE_STORAGE_FBE OPLUS_FEATURE_STORAGE_MTP OPLUS_FEATURE_STORAGE_RESERVEPARTITION OPLUS_FEATURE_STORAGE_USB OPLUS_FEATURE_STORAGE_CUSTOMIZE_PARTITION OPLUS_FEATURE_STORAGE_FDE OPLUS_FEATURE_STORAGE_AUTOMATIC_TIMING OPLUS_BUG_UPDATABILITY OPLUS_FEATURE_RECOVERY_BUILD OPLUS_FEATURE_RECOVERY_BOOT OPLUS_FEATURE_RECOVERY_UI OPLUS_FEATURE_RECOVERY_RESET OPLUS_FEATURE_OTAPACKAGE_BUILD OPLUS_FEATURE_OTAPACKAGE_UPDATER OPLUS_FEATURE_OTAPACKAGE_SCRIPT OPLUS_FEATURE_BOOTANIMATION OPLUS_FEATURE_SECURE_GUARD OPLUS_FEATURE_SECURE_ROOTGUARD OPLUS_FEATURE_SECURE_MOUNTGUARD OPLUS_FEATURE_SECURE_EXECGUARD OPLUS_FEATURE_SECURE_KEVENTUPLOAD OPLUS_FEATURE_ENGINEERING_FILEACCESS OPLUS_FEATURE_ORMS OPLUS_FEATURE_MAINLINE OPLUS_FEATURE_CLOUD_COMPILE OPLUS_FEATURE_PMS_EXCEPTION_FIX OPLUS_FEATURE_PMS_BOOT_TIME_OPT OPLUS_FEATURE_CTS_FINGERPRINT OPLUS_FEATURE_RECOVERY_BOOT_REASON OPLUS_FEATURE_OP_RECOVERY OPLUS_FEATURE_SHUTDOWN_DETECT OPLUS_FEATURE_PHOENIX OPLUS_FEATURE_AGINGTEST OPLUS_FEATURE_FINGERPRINT OPLUS_FEATURE_FINGERPRINTPAY FP_HBM_BRIGHTNESS_DELAY FP_CONFIG_HYPNUSD_ENABLE FP_DCS_ENABLE FP_OPLUS_PLATFORMCPU_ALL8_BIG4567 FP_GOODIX_OPTICAL_SUPPORT FP_SETTINGS_ENABLE OPLUS_CUSTOM_ENCRYPT_ENABLE FP_CONFIG_BINDCORE_BYTID FP_CONFIG_SET_PRIORITY FP_CONFIG_SET_UXTHREAD OPLUS_FEATURE_FACERECOGNITION FACE_TEE_RUNTIME LOW_ST_BUFFER_SIZE FACE_CONFIG_CPU_VERSION FACE_PICTURE_ENCTRYPTED_CONFIG OPLUS_PLATFORMCPU_ALL8_BIG4567 FACE_DCS_ENABLE OPLUS_NOT_SUPPORT_FREE_FALL OPLUS_FEATURE_SENSOR_NOT_SUPPORT_CAMERA_PROTECT OPLUS_FEATURE_SENSOR OPLUS_FEATURE_SENSOR_ALGORITHM OPLUS_FEATURE_HEALTHINFO OPLUS_FEATURE_SCHED_ASSIST OPLUS_FEATURE_PROCESS_RECLAIM OPLUS_FEATURE_FG_IO_OPT OPLUS_FEATURE_MEMLEAK_DETECT OPLUS_FEATURE_CORE_CTL OPLUS_FEATURE_TP_BASIC OPLUS_FEATURE_TP_BSPFWUPDATE OPLUS_FEATURE_MULTI_KSWAPD OPLUS_FEATURE_ZRAM_OPT OPLUS_FEATURE_EXFAT_SUPPORT OPLUS_FEATURE_SDCARDFS_SUPPORT OPLUS_FEATURE_CHG_BASIC OPLUS_FEATURE_MULTI_FREEAREA OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY OPLUS_FEATURE_ACTIVITY_RECOGNITION OPLUS_FEATURE_ELEVATOR_DETECT OPLUS_FEATURE_STORAGE_TOOL OPLUS_FEATURE_NEW_FTMFLASHLIGHT_NODE OPLUS_ARCH_EXTENDS_CAM_TUNING_LIB OPLUS_ARCH_EXTENDS_CAM_TUNING_PARAMS OPLUS_FEATURE_CAMERA_COMMON OPLUS_FEATURE_WIFI_DATASTALL OPLUS_FEATURE_WIFI_MTUDETECT OPLUS_FEATURE_WIFI_SLA OPLUS_FEATURE_WIFI_GBK OPLUS_FEATURE_IPV6_OPTIMIZE OPLUS_FEATURE_WIFI_DUALSTA OPLUS_FEATURE_WIFI_OSHARE OPLUS_FEATURE_WIFI_SUPPLICANTHIDL OPLUS_FEATURE_WIFI_SMART_BW OPLUS_FEATURE_WIFI_LIMMITBGSPEED OPLUS_FEATURE_BT_INTEROPLIST OPLUS_FEATURE_BT_FW_OVERRIDE_MTK OPLUS_FEATURE_BT_FW_SSRDUMP OPLUS_FEATURE_BT_FW_SAU_MTK OPLUS_FEATURE_FONT_FLIP OPLUS_FEATURE_MOTION_INTERCEPT OPLUS_FEATURE_LINKERCONFIG_CUSTOM OPLUS_FEATURE_RESOURCES_COMPILE OPLUS_FEATURE_DARKMODE OPLUS_FEATURE_DUMP_SENSOR OPLUS_FEATURE_GAMEECO_COOLEFFECT OPLUS_FEATURE_ATLAS OPLUS_FEATURE_AUDIO_FTM OPLUS_FEATURE_AUDIOSERVER_DEBUG OPLUS_FEATURE_VIP_RECORD OPLUS_FEATURE_PA_DUMMY OPLUS_FEATURE_SMARTVOL OPLUS_FEATURE_VOIP_ENHANCE OPLUS_FEATURE_KTV OPLUS_FEATURE_LVIMFS_SUPPORT OPLUS_FEATURE_PLAYBACKCAPTURE OPLUS_FEATURE_GAME_MUTE OPLUS_FEATURE_VOICE_CHANGER OPLUS_FEATURE_VIBRING_SYNC OPLUS_FEATURE_INPUTCHANNEL_CHOICE OPLUS_FEATURE_AUDIOVOICE_SCENCE OPLUS_FEATURE_DOLBY OPLUS_FEATURE_DIRAC OPLUS_FEATURE_OPERATOR_RINGTONE OPLUS_FEATURE_CAMERASOUND_FORCE OPLUS_FEATURE_FORBID_RECORD OPLUS_FEATURE_SPEAKER_MUTE OPLUS_FEATURE_SSR OPLUS_FEATURE_AUDIO_LOWLATENCY OPLUS_FEATURE_GAME_AUDIO_EFFECTS OPLUS_FEATURE_VOICE_WAKEUP OPLUS_FEATURE_VOICE_WAKEUP_LOG_ENABLE OPLUS_FEATURE_CUSTOM_SCENE OPLUS_FEATURE_CTS_AEC OPLUS_FEATURE_MULTISCENE_RECORD OPLUS_FEATURE_AUDIO_DUMP OPLUS_FEATURE_AEC_RECORD OPLUS_FEATURE_OPLUS_AVENHANCEMENT OPLUS_FEATURE_APE_DECODER OPLUS_FEATURE_VIDEO_TITLE OPLUS_FEATURE_MP3_RECORDER OPLUS_FEATURE_FFMPEG_INTEGRATION OPLUS_FEATURE_FEEDBACK_INFO OPLUS_FEATURE_IMAGE_PROCESSING OPLUS_FEATURE_ZEN_MODE OPLUS_FEATURE_DRM_HDCP OPLUS_FEATURE_ONSCREENFINGERPRINT OPLUS_FEATURE_DC OPLUS_FEATURE_AOD OPLUS_FEATURE_DRE OPLUS_FEATURE_OSC OPLUS_FEATURE_AUTOBRIGHTNESS OPLUS_FEATURE_GPU_MINIDUMP OPLUS_FEATURE_SCREENSHOT OPLUS_FEATURE_OSIE OPLUS_FEATURE_VPP OPLUS_FEATURE_GAME_OIFACE OPLUS_FEATURE_PLATFORM_MTK
++export OPLUS_NATIVE_MACRO_FEATURES=OPLUS_BUG_STABILITY OPLUS_BUG_COMPATIBILITY OPLUS_BUG_DEBUG OPLUS_ARCH_INJECT OPLUS_ARCH_EXTENDS VENDOR_EDIT OPLUS_FEATURE_PLATFORM OPLUS_FEATURE_PERFORMANCE OPLUS_FEATURE_ENGINEERTOOLS OPLUS_FEATURE_SELINUX_DEBUG_BUILD OPLUS_FEATURE_SELINUX_CONTEXTS OPLUS_FEATURE_DYNAMIC_KEYMAP OPLUS_FEATURE_DROP_STATUSBAR OPLUS_FEATURE_GESTURE_SCREENSHOT OPLUS_FEATURE_STORAGE OPLUS_FEATURE_STORAGE_MOUNT OPLUS_FEATURE_STORAGE_RESIZE OPLUS_FEATURE_STORAGE_TRIM OPLUS_FEATURE_STORAGE_FBE OPLUS_FEATURE_STORAGE_MTP OPLUS_FEATURE_STORAGE_RESERVEPARTITION OPLUS_FEATURE_STORAGE_USB OPLUS_FEATURE_STORAGE_CUSTOMIZE_PARTITION OPLUS_FEATURE_STORAGE_FDE OPLUS_FEATURE_STORAGE_AUTOMATIC_TIMING OPLUS_BUG_UPDATABILITY OPLUS_FEATURE_RECOVERY_BUILD OPLUS_FEATURE_RECOVERY_BOOT OPLUS_FEATURE_RECOVERY_UI OPLUS_FEATURE_RECOVERY_RESET OPLUS_FEATURE_OTAPACKAGE_BUILD OPLUS_FEATURE_OTAPACKAGE_UPDATER OPLUS_FEATURE_OTAPACKAGE_SCRIPT OPLUS_FEATURE_BOOTANIMATION OPLUS_FEATURE_ENGINEERING_FILEACCESS OPLUS_FEATURE_ORMS OPLUS_FEATURE_MAINLINE OPLUS_FEATURE_CLOUD_COMPILE OPLUS_FEATURE_PMS_EXCEPTION_FIX OPLUS_FEATURE_PMS_BOOT_TIME_OPT OPLUS_FEATURE_CTS_FINGERPRINT OPLUS_FEATURE_RECOVERY_BOOT_REASON OPLUS_FEATURE_OP_RECOVERY OPLUS_FEATURE_SHUTDOWN_DETECT OPLUS_FEATURE_PHOENIX OPLUS_FEATURE_AGINGTEST OPLUS_FEATURE_FINGERPRINT OPLUS_FEATURE_FINGERPRINTPAY FP_HBM_BRIGHTNESS_DELAY FP_CONFIG_HYPNUSD_ENABLE FP_DCS_ENABLE FP_OPLUS_PLATFORMCPU_ALL8_BIG4567 FP_GOODIX_OPTICAL_SUPPORT FP_SETTINGS_ENABLE OPLUS_CUSTOM_ENCRYPT_ENABLE FP_CONFIG_BINDCORE_BYTID FP_CONFIG_SET_PRIORITY FP_CONFIG_SET_UXTHREAD OPLUS_FEATURE_FACERECOGNITION FACE_TEE_RUNTIME LOW_ST_BUFFER_SIZE FACE_CONFIG_CPU_VERSION FACE_PICTURE_ENCTRYPTED_CONFIG OPLUS_PLATFORMCPU_ALL8_BIG4567 FACE_DCS_ENABLE OPLUS_NOT_SUPPORT_FREE_FALL OPLUS_FEATURE_SENSOR_NOT_SUPPORT_CAMERA_PROTECT OPLUS_FEATURE_SENSOR OPLUS_FEATURE_SENSOR_ALGORITHM OPLUS_FEATURE_HEALTHINFO OPLUS_FEATURE_SCHED_ASSIST OPLUS_FEATURE_PROCESS_RECLAIM OPLUS_FEATURE_FG_IO_OPT OPLUS_FEATURE_MEMLEAK_DETECT OPLUS_FEATURE_CORE_CTL OPLUS_FEATURE_TP_BASIC OPLUS_FEATURE_TP_BSPFWUPDATE OPLUS_FEATURE_MULTI_KSWAPD OPLUS_FEATURE_ZRAM_OPT OPLUS_FEATURE_EXFAT_SUPPORT OPLUS_FEATURE_SDCARDFS_SUPPORT OPLUS_FEATURE_CHG_BASIC OPLUS_FEATURE_MULTI_FREEAREA OPLUS_FEATURE_VIRTUAL_RESERVE_MEMORY OPLUS_FEATURE_ACTIVITY_RECOGNITION OPLUS_FEATURE_ELEVATOR_DETECT OPLUS_FEATURE_STORAGE_TOOL OPLUS_FEATURE_NEW_FTMFLASHLIGHT_NODE OPLUS_ARCH_EXTENDS_CAM_TUNING_LIB OPLUS_ARCH_EXTENDS_CAM_TUNING_PARAMS OPLUS_FEATURE_CAMERA_COMMON OPLUS_FEATURE_WIFI_DATASTALL OPLUS_FEATURE_WIFI_MTUDETECT OPLUS_FEATURE_WIFI_SLA OPLUS_FEATURE_WIFI_GBK OPLUS_FEATURE_IPV6_OPTIMIZE OPLUS_FEATURE_WIFI_DUALSTA OPLUS_FEATURE_WIFI_OSHARE OPLUS_FEATURE_WIFI_SUPPLICANTHIDL OPLUS_FEATURE_WIFI_SMART_BW OPLUS_FEATURE_WIFI_LIMMITBGSPEED OPLUS_FEATURE_BT_INTEROPLIST OPLUS_FEATURE_BT_FW_OVERRIDE_MTK OPLUS_FEATURE_BT_FW_SSRDUMP OPLUS_FEATURE_BT_FW_SAU_MTK OPLUS_FEATURE_FONT_FLIP OPLUS_FEATURE_MOTION_INTERCEPT OPLUS_FEATURE_LINKERCONFIG_CUSTOM OPLUS_FEATURE_RESOURCES_COMPILE OPLUS_FEATURE_DARKMODE OPLUS_FEATURE_DUMP_SENSOR OPLUS_FEATURE_GAMEECO_COOLEFFECT OPLUS_FEATURE_ATLAS OPLUS_FEATURE_AUDIO_FTM OPLUS_FEATURE_AUDIOSERVER_DEBUG OPLUS_FEATURE_VIP_RECORD OPLUS_FEATURE_PA_DUMMY OPLUS_FEATURE_SMARTVOL OPLUS_FEATURE_VOIP_ENHANCE OPLUS_FEATURE_KTV OPLUS_FEATURE_LVIMFS_SUPPORT OPLUS_FEATURE_PLAYBACKCAPTURE OPLUS_FEATURE_GAME_MUTE OPLUS_FEATURE_VOICE_CHANGER OPLUS_FEATURE_VIBRING_SYNC OPLUS_FEATURE_INPUTCHANNEL_CHOICE OPLUS_FEATURE_AUDIOVOICE_SCENCE OPLUS_FEATURE_DOLBY OPLUS_FEATURE_DIRAC OPLUS_FEATURE_OPERATOR_RINGTONE OPLUS_FEATURE_CAMERASOUND_FORCE OPLUS_FEATURE_FORBID_RECORD OPLUS_FEATURE_SPEAKER_MUTE OPLUS_FEATURE_SSR OPLUS_FEATURE_AUDIO_LOWLATENCY OPLUS_FEATURE_GAME_AUDIO_EFFECTS OPLUS_FEATURE_VOICE_WAKEUP OPLUS_FEATURE_VOICE_WAKEUP_LOG_ENABLE OPLUS_FEATURE_CUSTOM_SCENE OPLUS_FEATURE_CTS_AEC OPLUS_FEATURE_MULTISCENE_RECORD OPLUS_FEATURE_AUDIO_DUMP OPLUS_FEATURE_AEC_RECORD OPLUS_FEATURE_OPLUS_AVENHANCEMENT OPLUS_FEATURE_APE_DECODER OPLUS_FEATURE_VIDEO_TITLE OPLUS_FEATURE_MP3_RECORDER OPLUS_FEATURE_FFMPEG_INTEGRATION OPLUS_FEATURE_FEEDBACK_INFO OPLUS_FEATURE_IMAGE_PROCESSING OPLUS_FEATURE_ZEN_MODE OPLUS_FEATURE_DRM_HDCP OPLUS_FEATURE_ONSCREENFINGERPRINT OPLUS_FEATURE_DC OPLUS_FEATURE_AOD OPLUS_FEATURE_DRE OPLUS_FEATURE_OSC OPLUS_FEATURE_AUTOBRIGHTNESS OPLUS_FEATURE_GPU_MINIDUMP OPLUS_FEATURE_SCREENSHOT OPLUS_FEATURE_OSIE OPLUS_FEATURE_VPP OPLUS_FEATURE_GAME_OIFACE OPLUS_FEATURE_PLATFORM_MTK
+ export TARGET_PRODUCT=vnd_oplus6893
+diff --git a/security/selinux/Kconfig b/security/selinux/Kconfig
+index 12db25e042fc..8297e48a283d 100644
+--- a/security/selinux/Kconfig
++++ b/security/selinux/Kconfig
+@@ -61,11 +61,7 @@ config SECURITY_SELINUX_DISABLE
+ config SECURITY_SELINUX_DEVELOP
+ 	bool "NSA SELinux Development Support"
+ 	depends on SECURITY_SELINUX
+-	#ifndef OPLUS_FEATURE_FORCE_SELINUX
+-	#default y
+-	#else OPLUS_FEATURE_FORCE_SELINUX
+-	default n
+-	#endif OPLUS_FEATURE_FORCE_SELINUX
++	default y
+ 	help
+ 	  This enables the development support option of NSA SELinux,
+ 	  which is useful for experimenting with SELinux and developing
+diff --git a/security/selinux/avc.c b/security/selinux/avc.c
+index 683cbbf74c5a..59fa20b537c0 100644
+--- a/security/selinux/avc.c
++++ b/security/selinux/avc.c
+@@ -33,9 +33,6 @@
+ #include "avc.h"
+ #include "avc_ss.h"
+ #include "classmap.h"
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-#include <soc/oplus/system/proc.h>
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+ 
+ #define AVC_CACHE_SLOTS			512
+ #define AVC_DEF_CACHE_THRESHOLD		512
+@@ -789,11 +786,6 @@ noinline int slow_avc_audit(struct selinux_state *state,
+ 	struct common_audit_data stack_data;
+ 	struct selinux_audit_data sad;
+ 
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-	if (!is_avc_audit_enable())
+-		return 0;
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+-
+ 	if (!a) {
+ 		a = &stack_data;
+ 		a->type = LSM_AUDIT_DATA_NONE;
+diff --git a/security/selinux/hooks.c b/security/selinux/hooks.c
+index 6e2e64d0b7d9..f4b416af3b90 100644
+--- a/security/selinux/hooks.c
++++ b/security/selinux/hooks.c
+@@ -7011,14 +7011,6 @@ void selinux_complete_init(void)
+ 	iterate_supers(delayed_superblock_init, NULL);
+ }
+ 
+-#ifdef CONFIG_OPLUS_SECURE_GUARD
+-int get_current_security_context(char **context, u32 *context_len)
+-{
+-	u32 sid = current_sid();
+-    return security_sid_to_context(&selinux_state, sid, context, context_len);
+-}
+-#endif /* CONFIG_OPLUS_SECURE_GUARD */
+-
+ /* SELinux requires early initialization in order to label
+    all processes and objects when they are created. */
+ security_initcall(selinux_init);
+diff --git a/security/selinux/selinuxfs.c b/security/selinux/selinuxfs.c
+index f5eebec5ad58..dba17ea51ec0 100644
+--- a/security/selinux/selinuxfs.c
++++ b/security/selinux/selinuxfs.c
+@@ -42,10 +42,6 @@
+ #include "objsec.h"
+ #include "conditional.h"
+ 
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-#include <soc/oplus/system/proc.h>
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+-
+ enum sel_inos {
+ 	SEL_ROOT_INO = 2,
+ 	SEL_LOAD,	/* load policy */
+@@ -2121,10 +2117,6 @@ static int __init init_sel_fs(void)
+ 		selinux_null.dentry = NULL;
+ 	}
+ 
+-#ifdef OPLUS_FEATURE_SELINUX_CONTROL_LOG
+-	init_denied_proc();
+-#endif /* OPLUS_FEATURE_SELINUX_CONTROL_LOG */
+-
+ 	return err;
+ }
+ 
+diff --git a/tools/changeConfig.sh b/tools/changeConfig.sh
+deleted file mode 100755
+index 3867c64129e0..000000000000
+--- a/tools/changeConfig.sh
++++ /dev/null
+@@ -1,39 +0,0 @@
+-#!/bin/bash
+-if [ "$#" != "1" ]; then
+-  echo "usage: changeConfig.sh <config_path>"
+-  exit -1
+-fi
+-configFile=$1
+-if [ "$OBSOLETE_KEEP_ADB_SECURE" != "1" ] || \
+-   [ "$EUCLID_BUILD_INSECURE_KERNEL" == "1" ] || \
+-   [ "$TARGET_BUILD_VARIANT" != "user" ] ; then \
+-  sed -i '/CONFIG_SECURITY_SELINUX_DEVELOP.*/d' $configFile
+-  echo -e "CONFIG_SECURITY_SELINUX_DEVELOP=y\n" >> $configFile
+-else
+-  sed -i '/CONFIG_SECURITY_SELINUX_DEVELOP.*/d' $configFile
+-fi
+-echo  "===OBSOLETE_KEEP_ADB_SECURE = $OBSOLETE_KEEP_ADB_SECURE"
+-echo  "===EUCLID_BUILD_INSECURE_KERNEL = $EUCLID_BUILD_INSECURE_KERNEL"
+-echo  "===TARGET_BUILD_VARIANT = $TARGET_BUILD_VARIANT"
+-
+-function setting_kernel_config()
+-{
+-    config=$1
+-    value=$2
+-    string=$3
+-
+-    sed -i "/${config}.*/d" $configFile
+-
+-    if [ $string -eq 0 ]
+-    then
+-        echo -e "${config}=${value}" >> $configFile
+-    else
+-        echo -e "${config}=\"${value}\"" >> $configFile
+-    fi
+-}
+-
+-if [[ "$TARGET_MEMLEAK_DETECT_TEST" == 1 ]]
+-then
+-    setting_kernel_config CONFIG_OPLUS_MEMLEAK_DETECT true 1
+-    setting_kernel_config CONFIG_MEMLEAK_DETECT_THREAD y 0
+-fi
