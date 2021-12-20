@@ -1,0 +1,87 @@
+From f15505c2d0ccb048069f9ac2be97bb08f3f9e2eb Mon Sep 17 00:00:00 2001
+From: SagarMakhar <sagarmakhar@gmail.com>
+Date: Wed, 24 Nov 2021 18:27:09 +0000
+Subject: [PATCH] brightness curve
+
+Signed-off-by: SagarMakhar <sagarmakhar@gmail.com>
+Change-Id: I83b38a1334b8df156e4e53b06243c48d565be5d5
+Signed-off-by: SagarMakhar <sagarmakhar@gmail.com>
+---
+ .../brightness/BrightnessController.java      | 21 +++++++++----------
+ 1 file changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/packages/SystemUI/src/com/android/systemui/settings/brightness/BrightnessController.java b/packages/SystemUI/src/com/android/systemui/settings/brightness/BrightnessController.java
+index 565bce8a3c9b..dd456d9da4cd 100644
+--- a/packages/SystemUI/src/com/android/systemui/settings/brightness/BrightnessController.java
++++ b/packages/SystemUI/src/com/android/systemui/settings/brightness/BrightnessController.java
+@@ -16,10 +16,6 @@
+ 
+ package com.android.systemui.settings.brightness;
+ 
+-import static com.android.settingslib.display.BrightnessUtils.GAMMA_SPACE_MAX;
+-import static com.android.settingslib.display.BrightnessUtils.convertGammaToLinearFloat;
+-import static com.android.settingslib.display.BrightnessUtils.convertLinearToGammaFloat;
+-
+ import android.animation.ValueAnimator;
+ import android.content.ContentResolver;
+ import android.content.Context;
+@@ -297,7 +293,7 @@ public class BrightnessController implements ToggleSlider.Listener {
+         mContext = context;
+         mIcon = icon;
+         mControl = control;
+-        mControl.setMax(GAMMA_SPACE_MAX);
++        mControl.setMax(255);
+         mBackgroundHandler = new Handler((Looper) Dependency.get(Dependency.BG_LOOPER));
+         mUserTracker = new CurrentUserTracker(broadcastDispatcher) {
+             @Override
+@@ -384,14 +380,16 @@ public class BrightnessController implements ToggleSlider.Listener {
+             maxBacklight = mBrightnessMax;
+         }
+         final float valFloat = MathUtils.min(
+-                convertGammaToLinearFloat(value, minBacklight, maxBacklight),
+-                maxBacklight);
++                MathUtils.constrain(BrightnessSynchronizer.brightnessIntToFloat(value),
++                         minBacklight, maxBacklight),
++                         maxBacklight);
+         if (stopTracking) {
+             // TODO(brightnessfloat): change to use float value instead.
+             MetricsLogger.action(mContext, metric,
+                     BrightnessSynchronizer.brightnessFloatToInt(valFloat));
+ 
+         }
++android.util.Slog.d("sagar", "val=" + value + ", valFloat=" + valFloat);
+         setBrightness(valFloat);
+         if (!tracking) {
+             AsyncTask.execute(new Runnable() {
+@@ -447,15 +445,16 @@ public class BrightnessController implements ToggleSlider.Listener {
+             min = mBrightnessMin;
+             max = mBrightnessMax;
+         }
+-        // convertGammaToLinearFloat returns 0-1
+         if (BrightnessSynchronizer.floatEquals(brightnessValue,
+-                convertGammaToLinearFloat(mControl.getValue(), min, max))) {
++                    MathUtils.constrain(BrightnessSynchronizer.brightnessIntToFloat(mControl.getValue()),
++                            min, max))) {
+             // If the value in the slider is equal to the value on the current brightness
+             // then the slider does not need to animate, since the brightness will not change.
+             return;
+         }
+         // Returns GAMMA_SPACE_MIN - GAMMA_SPACE_MAX
+-        final int sliderVal = convertLinearToGammaFloat(brightnessValue, min, max);
++        final int sliderVal = BrightnessSynchronizer.brightnessFloatToInt(
++                MathUtils.constrain(brightnessValue, min, max));
+         animateSliderTo(sliderVal);
+     }
+ 
+@@ -475,7 +474,7 @@ public class BrightnessController implements ToggleSlider.Listener {
+             mExternalChange = false;
+         });
+         final long animationDuration = SLIDER_ANIMATION_DURATION * Math.abs(
+-                mControl.getValue() - target) / GAMMA_SPACE_MAX;
++                mControl.getValue() - target) / 255;
+         mSliderAnimator.setDuration(animationDuration);
+         mSliderAnimator.start();
+     }
+-- 
+2.17.1
+
