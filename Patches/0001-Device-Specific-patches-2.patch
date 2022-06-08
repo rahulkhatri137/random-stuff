@@ -1,0 +1,26 @@
+From 59b9fd4bb8cc507bbd2bae85067af097e2f88553 Mon Sep 17 00:00:00 2001
+From: Sarthak Roy <sarthakroy2002@gmail.com>
+Date: Wed, 8 Jun 2022 17:55:22 +0000
+Subject: [PATCH] Device Specific patches 2
+
+---
+ rro_overlays/FrameworksResOverlayRMX2020/res/values/config.xml | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/rro_overlays/FrameworksResOverlayRMX2020/res/values/config.xml b/rro_overlays/FrameworksResOverlayRMX2020/res/values/config.xml
+index dbd9cd6..2471bfa 100644
+--- a/rro_overlays/FrameworksResOverlayRMX2020/res/values/config.xml
++++ b/rro_overlays/FrameworksResOverlayRMX2020/res/values/config.xml
+@@ -220,9 +220,6 @@
+     <!-- Whether to post reset runnable for all clients. Needed for some older
+          vendor fingerprint HAL implementations. -->
+     <bool name="config_fingerprintPostResetRunnableForAllClients">true</bool>
+-
+-	<!-- Whether to cleanup fingerprints upon connection to the daemon and when user switches -->
+-    <bool name="config_cleanupUnusedFingerprints">false</bool>
+     
+     <!-- Operating volatage for bluetooth controller. 0 by default-->
+      <integer name="config_bluetooth_operating_voltage_mv">3300</integer>
+-- 
+2.36.1
+
