@@ -1,0 +1,30 @@
+From 82c77a1b85ae2dc7dc041169da5ecc9c742bb2c8 Mon Sep 17 00:00:00 2001
+From: Sarthak Roy <sarthakroy2002@gmail.com>
+Date: Wed, 8 Jun 2022 17:51:55 +0000
+Subject: [PATCH] Device Specific patches
+
+---
+ .../common/lineage-sdk/lineage/res/res/values/config.xml | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/overlay/common/lineage-sdk/lineage/res/res/values/config.xml b/overlay/common/lineage-sdk/lineage/res/res/values/config.xml
+index c34c6ecd..69c1f863 100644
+--- a/overlay/common/lineage-sdk/lineage/res/res/values/config.xml
++++ b/overlay/common/lineage-sdk/lineage/res/res/values/config.xml
+@@ -28,4 +28,13 @@
+         <item>com.google.android.gms/com.google.android.gms.update.SystemUpdateGcmTaskService</item>
+         <item>com.google.android.gms/com.google.android.gms.update.SystemUpdateService</item>
+     </string-array>
++    <!-- Whether to cleanup fingerprints upon connection to the daemon and when user switches -->
++    <bool name="config_cleanupUnusedFingerprints">false</bool>
++    <!-- Defines the actions shown in advanced reboot submenu -->
++    <string-array name="config_restartActionsList">
++        <item>restart</item>
++        <item>restart_recovery</item>
++        <item>restart_bootloader</item>
++        <item>restart_fastboot</item>
++    </string-array>
+ </resources>
+-- 
+2.36.1
+
