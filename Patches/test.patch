@@ -1,0 +1,22 @@
+diff --git a/app/Music/Android.mk b/app/Music/Android.mk
+index 3ef770d..a569da8 100644
+--- a/app/Music/Android.mk
++++ b/app/Music/Android.mk
+@@ -8,5 +8,6 @@ LOCAL_SRC_FILES := $(LOCAL_MODULE).apk
+ LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE_CLASS := ETC
+ LOCAL_MODULE_PATH := $(TARGET_OUT)/app/$(LOCAL_MODULE)
++LOCAL_CERTIFICATE := PRESIGNED
+ 
+ include $(BUILD_PREBUILT)
+diff --git a/app/Weather/Android.mk b/app/Weather/Android.mk
+index dc50206..15dc299 100644
+--- a/app/Weather/Android.mk
++++ b/app/Weather/Android.mk
+@@ -8,5 +8,6 @@ LOCAL_SRC_FILES := $(LOCAL_MODULE).apk
+ LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE_CLASS := ETC
+ LOCAL_MODULE_PATH := $(TARGET_OUT)/app/$(LOCAL_MODULE)
++LOCAL_CERTIFICATE := PRESIGNED
+ 
+ include $(BUILD_PREBUILT)
