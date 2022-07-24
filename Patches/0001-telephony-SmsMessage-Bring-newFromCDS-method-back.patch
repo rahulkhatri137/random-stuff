@@ -1,0 +1,34 @@
+From 3097488101dfe75b47c6ec8feb35f33f3c63cbb2 Mon Sep 17 00:00:00 2001
+From: Rahul <82636553+rahulkhatri137@users.noreply.github.com>
+Date: Sun, 24 Jul 2022 12:20:22 +0530
+Subject: [PATCH 1/2] telephony: SmsMessage: Bring newFromCDS method back
+
+---
+ .../android/internal/telephony/gsm/SmsMessage.java    | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/telephony/java/com/android/internal/telephony/gsm/SmsMessage.java b/telephony/java/com/android/internal/telephony/gsm/SmsMessage.java
+index b51e8d3d3c5d..dadcdb69c7dc 100644
+--- a/telephony/java/com/android/internal/telephony/gsm/SmsMessage.java
++++ b/telephony/java/com/android/internal/telephony/gsm/SmsMessage.java
+@@ -140,6 +140,17 @@ public class SmsMessage extends SmsMessageBase {
+         return (mProtocolIdentifier == 0x40);
+     }
+ 
++    public static SmsMessage newFromCDS(byte[] pdu) {
++        try {
++            SmsMessage msg = new SmsMessage();
++            msg.parsePdu(pdu);
++            return msg;
++        } catch (RuntimeException ex) {
++            Rlog.e(LOG_TAG, "CDS SMS PDU parsing failed: ", ex);
++            return null;
++        }
++    }
++
+     /**
+      * Creates an SmsMessage from an SMS EF record.
+      *
+-- 
+2.37.1
+
